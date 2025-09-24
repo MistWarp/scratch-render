@@ -251,6 +251,8 @@ class RenderWebGL extends EventEmitter {
 
         this.offscreenTouching = false;
 
+        this.useRealLayerIndexes = false;
+
         this.dirty = true;
 
         /**
@@ -857,6 +859,8 @@ class RenderWebGL extends EventEmitter {
         const startIndex = currentLayerGroup.drawListOffset;
         const endIndex = this._endIndexForKnownLayerGroup(currentLayerGroup);
 
+        const useRealLayers = this.useRealLayerIndexes;
+
         let oldIndex = startIndex;
         while (oldIndex < endIndex) {
             if (this._drawList[oldIndex] === drawableID) {
@@ -866,26 +870,47 @@ class RenderWebGL extends EventEmitter {
         }
 
         if (oldIndex < endIndex) {
-            // Remove drawable from the list.
-            if (order === 0) {
-                return oldIndex;
+            if (order === 0) return oldIndex;
+
+            if (useRealLayers) {
+                delete this._drawList[oldIndex];
+            } else {
+                this._drawList.splice(oldIndex, 1);
             }
 
-            const _ = this._drawList.splice(oldIndex, 1)[0];
-            // Determine new index.
             let newIndex = order;
             if (optIsRelative) {
                 newIndex += oldIndex;
+
+                if (order > 0 && useRealLayers && newIndex < this._drawList.length) {
+                    if (newIndex in this._drawList) {
+                        const temp = this._drawList[newIndex];
+                        this._drawList[newIndex] = drawableID;
+                        this._drawList[oldIndex] = temp;
+                        return newIndex;
+                    }
+                }
             }
 
             const possibleMin = (optMin || 0) + startIndex;
             const min = (possibleMin >= startIndex && possibleMin < endIndex) ? possibleMin : startIndex;
             newIndex = Math.max(newIndex, min);
 
-            newIndex = Math.min(newIndex, endIndex);
+            if (useRealLayers) {
+                if (newIndex >= this._drawList.length) {
+                    this._drawList.length++;
+                }
 
-            // Insert at new index.
-            this._drawList.splice(newIndex, 0, drawableID);
+                if (typeof this._drawList[newIndex] === 'undefined') {
+                    this._drawList[newIndex] = drawableID;
+                } else {
+                    this._drawList.splice(newIndex, 0, drawableID);
+                }
+            } else {
+                newIndex = Math.min(newIndex, endIndex);
+                this._drawList.splice(newIndex, 0, drawableID);
+            }
+
             return newIndex;
         }
 
@@ -2087,6 +2112,7 @@ class RenderWebGL extends EventEmitter {
         const numDrawables = drawables.length;
         for (let drawableIndex = 0; drawableIndex < numDrawables; ++drawableIndex) {
             const drawableID = drawables[drawableIndex];
+            if (!drawableID) continue;
 
             // If we have a filter, check whether the ID fails
             if (opts.filter && !opts.filter(drawableID)) continue;
