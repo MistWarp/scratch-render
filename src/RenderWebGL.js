@@ -119,7 +119,7 @@ class RenderWebGL extends EventEmitter {
      * @param {canvas} [optCanvas] - An optional canvas to use for the test. Otherwise a temporary canvas will be used.
      * @returns {boolean} - True if this environment appears to support this renderer, false otherwise.
      */
-    static isSupported (optCanvas) {
+    static isSupported(optCanvas) {
         try {
             optCanvas = optCanvas || document.createElement('canvas');
             const options = {
@@ -146,7 +146,7 @@ class RenderWebGL extends EventEmitter {
      * @returns {WebGLRenderingContext} - a TWGL rendering context (backed by either WebGL 1.0 or 2.0).
      * @private
      */
-    static _getContext (canvas) {
+    static _getContext(canvas) {
         const contextAttribs = {
             alpha: true,
             stencil: true,
@@ -172,7 +172,7 @@ class RenderWebGL extends EventEmitter {
      * @constructor
      * @listens RenderWebGL#event:NativeSizeChanged
      */
-    constructor (canvas, xLeft, xRight, yBottom, yTop) {
+    constructor(canvas, xLeft, xRight, yBottom, yTop) {
         super();
 
         /** @type {WebGLRenderingContext} */
@@ -329,13 +329,13 @@ class RenderWebGL extends EventEmitter {
     }
 
     // tw: implement high quality pen option
-    setUseHighQualityRender (enabled) {
+    setUseHighQualityRender(enabled) {
         this.dirty = true;
         this.useHighQualityRender = enabled;
         this.emit(RenderConstants.Events.UseHighQualityRenderChanged, enabled);
         this._updateRenderQuality();
     }
-    _updateRenderQuality () {
+    _updateRenderQuality() {
         if (this._penSkinId !== null) {
             const skin = this._allSkins[this._penSkinId];
             if (skin) {
@@ -357,7 +357,7 @@ class RenderWebGL extends EventEmitter {
      * Configure whether the renderer should let projects access private skins.
      * @param {boolean} allowPrivateSkinAccess Whether projects can access private skins or not.
      */
-    setPrivateSkinAccess (allowPrivateSkinAccess) {
+    setPrivateSkinAccess(allowPrivateSkinAccess) {
         this.allowPrivateSkinAccess = allowPrivateSkinAccess;
         this.emit(RenderConstants.Events.AllowPrivateSkinAccessChanged, allowPrivateSkinAccess);
     }
@@ -366,7 +366,7 @@ class RenderWebGL extends EventEmitter {
      * Modify the suggested maximum texture dimension. This should be set before any skins are created.
      * @param {number} newMax The new maximum in texels
      */
-    setMaxTextureDimension (newMax) {
+    setMaxTextureDimension(newMax) {
         const hardwareLimit = this._gl.getParameter(this._gl.MAX_TEXTURE_SIZE);
         this.maxTextureDimension = Math.min(newMax, hardwareLimit);
     }
@@ -374,14 +374,14 @@ class RenderWebGL extends EventEmitter {
     /**
      * @returns {WebGLRenderingContext} the WebGL rendering context associated with this renderer.
      */
-    get gl () {
+    get gl() {
         return this._gl;
     }
 
     /**
      * @returns {HTMLCanvasElement} the canvas of the WebGL rendering context associated with this renderer.
      */
-    get canvas () {
+    get canvas() {
         return this._gl && this._gl.canvas;
     }
 
@@ -391,8 +391,8 @@ class RenderWebGL extends EventEmitter {
      * @param {int} pixelsWide The desired width in device-independent pixels.
      * @param {int} pixelsTall The desired height in device-independent pixels.
      */
-    resize (pixelsWide, pixelsTall) {
-        const {canvas} = this._gl;
+    resize(pixelsWide, pixelsTall) {
+        const { canvas } = this._gl;
         const pixelRatio = window.devicePixelRatio || 1;
         const newWidth = pixelsWide * pixelRatio;
         const newHeight = pixelsTall * pixelRatio;
@@ -421,7 +421,7 @@ class RenderWebGL extends EventEmitter {
      * @param {number} blue The blue component for the background.
      * @param {number} alpha The alpha component for the background.
      */
-    setBackgroundColor (red, green, blue, alpha = 1) {
+    setBackgroundColor(red, green, blue, alpha = 1) {
         this.dirty = true;
 
         // WebGL will want the color to be pre-multiplied.
@@ -442,7 +442,7 @@ class RenderWebGL extends EventEmitter {
      * during certain operations.
      * @param {canvas} canvas The canvas to use for debug output.
      */
-    setDebugCanvas (canvas) {
+    setDebugCanvas(canvas) {
         this._debugCanvas = canvas;
     }
 
@@ -450,7 +450,7 @@ class RenderWebGL extends EventEmitter {
      * Control the use of the GPU or CPU paths in `isTouchingColor`.
      * @param {RenderWebGL.UseGpuModes} useGpuMode - automatically decide, force CPU, or force GPU.
      */
-    setUseGpuMode (useGpuMode) {
+    setUseGpuMode(useGpuMode) {
         this._useGpuMode = useGpuMode;
     }
 
@@ -461,7 +461,7 @@ class RenderWebGL extends EventEmitter {
      * @param {int} yBottom The bottom edge's y-coordinate. Scratch 2 uses -180.
      * @param {int} yTop The top edge's y-coordinate. Scratch 2 uses 180.
      */
-    setStageSize (xLeft, xRight, yBottom, yTop) {
+    setStageSize(xLeft, xRight, yBottom, yTop) {
         this._xLeft = xLeft;
         this._xRight = xRight;
         this._yBottom = yBottom;
@@ -476,7 +476,7 @@ class RenderWebGL extends EventEmitter {
     /**
      * @return {Array<int>} the "native" size of the stage, which is used for pen, query renders, etc.
      */
-    getNativeSize () {
+    getNativeSize() {
         return [this._nativeSize[0], this._nativeSize[1]];
     }
 
@@ -487,10 +487,10 @@ class RenderWebGL extends EventEmitter {
      * @private
      * @fires RenderWebGL#event:NativeSizeChanged
      */
-    _setNativeSize (width, height) {
+    _setNativeSize(width, height) {
         this._nativeSize = [width, height];
         this._updateOverlays();
-        this.emit(RenderConstants.Events.NativeSizeChanged, {newSize: this._nativeSize});
+        this.emit(RenderConstants.Events.NativeSizeChanged, { newSize: this._nativeSize });
     }
 
     /**
@@ -498,7 +498,7 @@ class RenderWebGL extends EventEmitter {
      * @param {string} mode Resize mode
      * @returns {*} Internal overlay object
      */
-    addOverlay (element, mode = 'scale') {
+    addOverlay(element, mode = 'scale') {
         const container = document.createElement('div');
         container.appendChild(element);
         this.overlayContainer.appendChild(container);
@@ -515,7 +515,7 @@ class RenderWebGL extends EventEmitter {
     /**
      * @param {HTMLElement} element HTML element
      */
-    removeOverlay (element) {
+    removeOverlay(element) {
         const overlayIndex = this._overlays.findIndex(i => i.userElement === element);
         if (overlayIndex !== -1) {
             this._overlays[overlayIndex].container.remove();
@@ -523,7 +523,7 @@ class RenderWebGL extends EventEmitter {
         }
     }
 
-    _updateOverlays () {
+    _updateOverlays() {
         const [nativeWidth, nativeHeight] = this._nativeSize;
         const dpiIndependentWidth = this.canvas.width / window.devicePixelRatio;
         const dpiIndependentHeight = this.canvas.height / window.devicePixelRatio;
@@ -563,7 +563,7 @@ class RenderWebGL extends EventEmitter {
      * the skin will be used.
      * @returns {!int} the ID for the new skin.
      */
-    createBitmapSkin (bitmapData, costumeResolution, rotationCenter) {
+    createBitmapSkin(bitmapData, costumeResolution, rotationCenter) {
         const skinId = this._nextSkinId++;
         const newSkin = new BitmapSkin(skinId, this);
         newSkin.setBitmap(bitmapData, costumeResolution, rotationCenter);
@@ -578,7 +578,7 @@ class RenderWebGL extends EventEmitter {
      * skin will be used
      * @returns {!int} the ID for the new skin.
      */
-    createSVGSkin (svgData, rotationCenter) {
+    createSVGSkin(svgData, rotationCenter) {
         const skinId = this._nextSkinId++;
         const newSkin = new SVGSkin(skinId, this);
         newSkin.setSVG(svgData, rotationCenter);
@@ -590,7 +590,7 @@ class RenderWebGL extends EventEmitter {
      * Create a new PenSkin - a skin which implements a Scratch pen layer.
      * @returns {!int} the ID for the new skin.
      */
-    createPenSkin () {
+    createPenSkin() {
         const skinId = this._nextSkinId++;
         const newSkin = new PenSkin(skinId, this);
         this._allSkins[skinId] = newSkin;
@@ -609,7 +609,7 @@ class RenderWebGL extends EventEmitter {
      * @param {!boolean} pointsLeft - which side the bubble is pointing.
      * @returns {!int} the ID for the new skin.
      */
-    createTextSkin (type, text, pointsLeft) {
+    createTextSkin(type, text, pointsLeft) {
         const skinId = this._nextSkinId++;
         const newSkin = new TextBubbleSkin(skinId, this);
         newSkin.setTextBubble(type, text, pointsLeft);
@@ -624,7 +624,7 @@ class RenderWebGL extends EventEmitter {
      * @param {?Array<number>} rotationCenter Optional: rotation center of the skin. If not supplied, the center of the
      * skin will be used
      */
-    updateSVGSkin (skinId, svgData, rotationCenter) {
+    updateSVGSkin(skinId, svgData, rotationCenter) {
         if (this._allSkins[skinId] instanceof SVGSkin) {
             this._allSkins[skinId].setSVG(svgData, rotationCenter);
             return;
@@ -643,7 +643,7 @@ class RenderWebGL extends EventEmitter {
      * @param {?Array<number>} rotationCenter Optional: rotation center of the skin. If not supplied, the center of the
      * skin will be used
      */
-    updateBitmapSkin (skinId, imgData, bitmapResolution, rotationCenter) {
+    updateBitmapSkin(skinId, imgData, bitmapResolution, rotationCenter) {
         if (this._allSkins[skinId] instanceof BitmapSkin) {
             this._allSkins[skinId].setBitmap(imgData, bitmapResolution, rotationCenter);
             return;
@@ -654,7 +654,7 @@ class RenderWebGL extends EventEmitter {
         this._reskin(skinId, newSkin);
     }
 
-    _reskin (skinId, newSkin) {
+    _reskin(skinId, newSkin) {
         const oldSkin = this._allSkins[skinId];
         this._allSkins[skinId] = newSkin;
 
@@ -674,7 +674,7 @@ class RenderWebGL extends EventEmitter {
      * @param {!string} text - the text for the bubble.
      * @param {!boolean} pointsLeft - which side the bubble is pointing.
      */
-    updateTextSkin (skinId, type, text, pointsLeft) {
+    updateTextSkin(skinId, type, text, pointsLeft) {
         if (this._allSkins[skinId] instanceof TextBubbleSkin) {
             this._allSkins[skinId].setTextBubble(type, text, pointsLeft);
             return;
@@ -690,7 +690,7 @@ class RenderWebGL extends EventEmitter {
      * Destroy an existing skin. Do not use the skin or its ID after calling this.
      * @param {!int} skinId - The ID of the skin to destroy.
      */
-    destroySkin (skinId) {
+    destroySkin(skinId) {
         const oldSkin = this._allSkins[skinId];
         oldSkin.dispose();
         delete this._allSkins[skinId];
@@ -701,7 +701,7 @@ class RenderWebGL extends EventEmitter {
      * @param {string} group Layer group to add the drawable to
      * @returns {int} The ID of the new Drawable.
      */
-    createDrawable (group) {
+    createDrawable(group) {
         if (!group || !Object.prototype.hasOwnProperty.call(this._layerGroups, group)) {
             log.warn('Cannot create a drawable without a known layer group');
             return;
@@ -722,7 +722,7 @@ class RenderWebGL extends EventEmitter {
      * @param {CanvasMeasurementProvider} measurementProvider helper for measuring text
      * @returns {TextWrapper} an instance of TextWrapper
      */
-    createTextWrapper (measurementProvider) {
+    createTextWrapper(measurementProvider) {
         return new (lazilyLoadTextWrapper())(measurementProvider);
     }
 
@@ -730,7 +730,7 @@ class RenderWebGL extends EventEmitter {
      * Mark a skin as containing private information.
      * @param {number} skinID The skin's ID
      */
-    markSkinAsPrivate (skinID) {
+    markSkinAsPrivate(skinID) {
         const skin = this._allSkins[skinID];
         if (!skin) {
             return;
@@ -743,7 +743,7 @@ class RenderWebGL extends EventEmitter {
      * @param {Array<string>} groupOrdering The ordered array of layer group
      * names
      */
-    setLayerGroupOrdering (groupOrdering) {
+    setLayerGroupOrdering(groupOrdering) {
         this._groupOrdering = groupOrdering;
         for (let i = 0; i < this._groupOrdering.length; i++) {
             this._layerGroups[this._groupOrdering[i]] = {
@@ -753,7 +753,7 @@ class RenderWebGL extends EventEmitter {
         }
     }
 
-    _addToDrawList (drawableID, group) {
+    _addToDrawList(drawableID, group) {
         const currentLayerGroup = this._layerGroups[group];
         const currentGroupOrderingIndex = currentLayerGroup.groupIndex;
 
@@ -763,24 +763,24 @@ class RenderWebGL extends EventEmitter {
         this._updateOffsets('add', currentGroupOrderingIndex);
     }
 
-    _updateOffsets (updateType, currentGroupOrderingIndex) {
+    _updateOffsets(updateType, currentGroupOrderingIndex) {
         for (let i = currentGroupOrderingIndex + 1; i < this._groupOrdering.length; i++) {
             const laterGroupName = this._groupOrdering[i];
             if (updateType === 'add') {
                 this._layerGroups[laterGroupName].drawListOffset++;
-            } else if (updateType === 'delete'){
+            } else if (updateType === 'delete') {
                 this._layerGroups[laterGroupName].drawListOffset--;
             }
         }
     }
 
-    get _visibleDrawList () {
+    get _visibleDrawList() {
         return this._drawList.filter(id => this._allDrawables[id]._visible);
     }
 
     // Given a layer group, return the index where it ends (non-inclusive),
     // e.g. the returned index does not have a drawable from this layer group in it)
-    _endIndexForKnownLayerGroup (layerGroup) {
+    _endIndexForKnownLayerGroup(layerGroup) {
         const groupIndex = layerGroup.groupIndex;
         if (groupIndex === this._groupOrdering.length - 1) {
             return this._drawList.length;
@@ -793,7 +793,7 @@ class RenderWebGL extends EventEmitter {
      * @param {int} drawableID The ID of the Drawable to remove.
      * @param {string} group Group name that the drawable belongs to
      */
-    destroyDrawable (drawableID, group) {
+    destroyDrawable(drawableID, group) {
         if (!group || !Object.prototype.hasOwnProperty.call(this._layerGroups, group)) {
             log.warn('Cannot destroy drawable without known layer group.');
             return;
@@ -828,7 +828,7 @@ class RenderWebGL extends EventEmitter {
      * @param {number} drawableID The drawable ID to find.
      * @return {number} The postion of the given drawable ID.
      */
-    getDrawableOrder (drawableID) {
+    getDrawableOrder(drawableID) {
         return this._drawList.indexOf(drawableID);
     }
 
@@ -848,7 +848,7 @@ class RenderWebGL extends EventEmitter {
      * @param {number=} optMin If set, order constrained to be at least `optMin`.
      * @return {?number} New order if changed, or null.
      */
-    setDrawableOrder (drawableID, order, group, optIsRelative, optMin) {
+    setDrawableOrder(drawableID, order, group, optIsRelative, optMin) {
         if (!group || !Object.prototype.hasOwnProperty.call(this._layerGroups, group)) {
             log.warn('Cannot set the order of a drawable without a known layer group.');
             return;
@@ -917,7 +917,7 @@ class RenderWebGL extends EventEmitter {
         return null;
     }
 
-    skinWasAltered (skin) {
+    skinWasAltered(skin) {
         // This is very hot function.
         for (let i = 0; i < this._allDrawables.length; i++) {
             const drawable = this._allDrawables[i];
@@ -930,7 +930,7 @@ class RenderWebGL extends EventEmitter {
     /**
      * Draw all current drawables and present the frame on the canvas.
      */
-    draw () {
+    draw() {
         if (!this.dirty) {
             return;
         }
@@ -972,7 +972,7 @@ class RenderWebGL extends EventEmitter {
      * @param {int} drawableID ID of Drawable to get bounds for.
      * @return {object} Bounds for a tight box around the Drawable.
      */
-    getBounds (drawableID) {
+    getBounds(drawableID) {
         const drawable = this._allDrawables[drawableID];
         // Tell the Drawable about its updated convex hull, if necessary.
         if (drawable.needsConvexHullPoints()) {
@@ -1005,7 +1005,7 @@ class RenderWebGL extends EventEmitter {
      * @param {int} drawableID ID of Drawable to get bubble bounds for.
      * @return {object} Bounds for a tight box around the Drawable top slice.
      */
-    getBoundsForBubble (drawableID) {
+    getBoundsForBubble(drawableID) {
         const drawable = this._allDrawables[drawableID];
         // Tell the Drawable about its updated convex hull, if necessary.
         if (drawable.needsConvexHullPoints()) {
@@ -1037,7 +1037,7 @@ class RenderWebGL extends EventEmitter {
      * @param {int} drawableID The ID of the Drawable to measure.
      * @return {Array<number>} Skin size, width and height.
      */
-    getCurrentSkinSize (drawableID) {
+    getCurrentSkinSize(drawableID) {
         const drawable = this._allDrawables[drawableID];
         return this.getSkinSize(drawable.skin.id);
     }
@@ -1047,7 +1047,7 @@ class RenderWebGL extends EventEmitter {
      * @param {int} skinID The ID of the Skin to measure.
      * @return {Array<number>} Skin size, width and height.
      */
-    getSkinSize (skinID) {
+    getSkinSize(skinID) {
         const skin = this._allSkins[skinID];
         return skin.size;
     }
@@ -1057,7 +1057,7 @@ class RenderWebGL extends EventEmitter {
      * @param {int} skinID The ID of the Skin
      * @return {Array<number>} The rotationCenterX and rotationCenterY
      */
-    getSkinRotationCenter (skinID) {
+    getSkinRotationCenter(skinID) {
         const skin = this._allSkins[skinID];
         return skin.calculateRotationCenter();
     }
@@ -1070,7 +1070,7 @@ class RenderWebGL extends EventEmitter {
      * @param {Array<int>} [mask3b] Optionally mask the check to this part of Drawable.
      * @returns {boolean} True iff the Drawable is touching the color.
      */
-    isTouchingColor (drawableID, color3b, mask3b) {
+    isTouchingColor(drawableID, color3b, mask3b) {
         const candidates = this._candidatesTouching(drawableID, this._visibleDrawList);
 
         let bounds;
@@ -1098,7 +1098,7 @@ class RenderWebGL extends EventEmitter {
 
         // if there are just too many pixels to CPU render efficiently, we need to let readPixels happen
         if (bounds.width * bounds.height * (candidates.length + 1) >= maxPixelsForCPU) {
-            this._isTouchingColorGpuStart(drawableID, candidates.map(({id}) => id).reverse(), bounds, color3b, mask3b);
+            this._isTouchingColorGpuStart(drawableID, candidates.map(({ id }) => id).reverse(), bounds, color3b, mask3b);
         }
 
         const drawable = this._allDrawables[drawableID];
@@ -1138,19 +1138,19 @@ class RenderWebGL extends EventEmitter {
         return false;
     }
 
-    _getMaxPixelsForCPU () {
+    _getMaxPixelsForCPU() {
         switch (this._useGpuMode) {
-        case RenderWebGL.UseGpuModes.ForceCPU:
-            return Infinity;
-        case RenderWebGL.UseGpuModes.ForceGPU:
-            return 0;
-        case RenderWebGL.UseGpuModes.Automatic:
-        default:
-            return __cpuTouchingColorPixelCount;
+            case RenderWebGL.UseGpuModes.ForceCPU:
+                return Infinity;
+            case RenderWebGL.UseGpuModes.ForceGPU:
+                return 0;
+            case RenderWebGL.UseGpuModes.Automatic:
+            default:
+                return __cpuTouchingColorPixelCount;
         }
     }
 
-    _enterDrawBackground () {
+    _enterDrawBackground() {
         const gl = this.gl;
         const currentShader = this._shaderManager.getShader(ShaderManager.DRAW_MODE.background, 0);
         gl.disable(gl.BLEND);
@@ -1158,12 +1158,12 @@ class RenderWebGL extends EventEmitter {
         twgl.setBuffersAndAttributes(gl, currentShader, this._bufferInfo);
     }
 
-    _exitDrawBackground () {
+    _exitDrawBackground() {
         const gl = this.gl;
         gl.enable(gl.BLEND);
     }
 
-    _isTouchingColorGpuStart (drawableID, candidateIDs, bounds, color3b, mask3b) {
+    _isTouchingColorGpuStart(drawableID, candidateIDs, bounds, color3b, mask3b) {
         this._doExitDrawRegion();
 
         const gl = this._gl;
@@ -1223,7 +1223,7 @@ class RenderWebGL extends EventEmitter {
 
             // Draw the candidate drawables on top of the background.
             this._drawThese(candidateIDs, ShaderManager.DRAW_MODE.default, projection,
-                {idFilterFunc: testID => testID !== drawableID}
+                { idFilterFunc: testID => testID !== drawableID }
             );
         } finally {
             gl.colorMask(true, true, true, true);
@@ -1232,7 +1232,7 @@ class RenderWebGL extends EventEmitter {
         }
     }
 
-    _isTouchingColorGpuFin (bounds, color3b, stop) {
+    _isTouchingColorGpuFin(bounds, color3b, stop) {
         const gl = this._gl;
         const pixels = new Uint8Array(Math.floor(bounds.width * (bounds.height - stop) * 4));
         gl.readPixels(0, 0, bounds.width, (bounds.height - stop), gl.RGBA, gl.UNSIGNED_BYTE, pixels);
@@ -1262,7 +1262,7 @@ class RenderWebGL extends EventEmitter {
      * @param {?Array<int>} candidateIDs The Drawable IDs to check, otherwise all visible drawables in the renderer
      * @returns {boolean} True if the Drawable is touching one of candidateIDs.
      */
-    isTouchingDrawables (drawableID, candidateIDs = this._drawList) {
+    isTouchingDrawables(drawableID, candidateIDs = this._drawList) {
         const candidates = this._candidatesTouching(drawableID,
             // even if passed an invisible drawable, we will NEVER touch it!
             candidateIDs.filter(id => this._allDrawables[id]._visible));
@@ -1311,7 +1311,7 @@ class RenderWebGL extends EventEmitter {
      * @returns {Rectangle} Scratch world space rectangle, iterate bottom <= top,
      *                      left <= right.
      */
-    clientSpaceToScratchBounds (centerX, centerY, width = 1, height = 1) {
+    clientSpaceToScratchBounds(centerX, centerY, width = 1, height = 1) {
         const gl = this._gl;
 
         const clientToScratchX = this._nativeSize[0] / gl.canvas.clientWidth;
@@ -1347,7 +1347,7 @@ class RenderWebGL extends EventEmitter {
      * @param {int} [touchHeight] The client height of the touch event (optional).
      * @returns {boolean} If the drawable has any pixels that would draw in the touch area
      */
-    drawableTouching (drawableID, centerX, centerY, touchWidth, touchHeight) {
+    drawableTouching(drawableID, centerX, centerY, touchWidth, touchHeight) {
         const drawable = this._allDrawables[drawableID];
         if (!drawable) {
             return false;
@@ -1387,7 +1387,7 @@ class RenderWebGL extends EventEmitter {
      * @returns {int} The ID of the topmost Drawable under the picking location, or
      * RenderConstants.ID_NONE if there is no Drawable at that location.
      */
-    pick (centerX, centerY, touchWidth, touchHeight, candidateIDs) {
+    pick(centerX, centerY, touchWidth, touchHeight, candidateIDs) {
         const bounds = this.clientSpaceToScratchBounds(centerX, centerY, touchWidth, touchHeight);
         if (bounds.left === -Infinity || bounds.bottom === -Infinity) {
             return false;
@@ -1459,7 +1459,7 @@ class RenderWebGL extends EventEmitter {
      * @param {int} drawableID The ID of the drawable to get pixel data for
      * @return {DrawableExtraction} Data about the picked drawable
      */
-    extractDrawableScreenSpace (drawableID) {
+    extractDrawableScreenSpace(drawableID) {
         const drawable = this._allDrawables[drawableID];
         if (!drawable) throw new Error(`Could not extract drawable with ID ${drawableID}; it does not exist`);
 
@@ -1504,7 +1504,7 @@ class RenderWebGL extends EventEmitter {
         const clampedHeight = Math.min(MAX_EXTRACTED_DRAWABLE_DIMENSION, canvasSpaceBounds.height, maxTextureSize);
 
         // Make a new bufferInfo since this._queryBufferInfo is limited to 480x360
-        const bufferInfo = twgl.createFramebufferInfo(gl, [{format: gl.RGBA}], clampedWidth, clampedHeight);
+        const bufferInfo = twgl.createFramebufferInfo(gl, [{ format: gl.RGBA }], clampedWidth, clampedHeight);
 
         try {
             twgl.bindFramebufferInfo(gl, bufferInfo);
@@ -1572,7 +1572,7 @@ class RenderWebGL extends EventEmitter {
      * @param {int} radius The client radius to extract pixels with.
      * @return {?ColorExtraction} Data about the picked color
      */
-    extractColor (x, y, radius) {
+    extractColor(x, y, radius) {
         this._doExitDrawRegion();
 
         const scratchX = Math.round(this._nativeSize[0] * ((x / this._gl.canvas.clientWidth) - 0.5));
@@ -1638,7 +1638,7 @@ class RenderWebGL extends EventEmitter {
      * @param {int} drawableID ID for drawable of query.
      * @return {?Rectangle} Rectangle bounds for touching query, or null.
      */
-    _touchingBounds (drawableID) {
+    _touchingBounds(drawableID) {
         const drawable = this._allDrawables[drawableID];
 
         /** @todo remove this once URL-based skin setting is removed. */
@@ -1662,7 +1662,7 @@ class RenderWebGL extends EventEmitter {
         return bounds;
     }
 
-    _unsnappedTouchingBounds (drawableID) {
+    _unsnappedTouchingBounds(drawableID) {
         // _touchingBounds with the snapToint call removed.
         const drawable = this._allDrawables[drawableID];
         if (!drawable.skin || !drawable.skin.getTexture([100, 100])) return null;
@@ -1683,7 +1683,7 @@ class RenderWebGL extends EventEmitter {
      * @param {Array<int>} candidateIDs - Candidates for touching query.
      * @return {?Array< {id, drawable, intersection} >} Filtered candidates with useful data.
      */
-    _candidatesTouching (drawableID, candidateIDs) {
+    _candidatesTouching(drawableID, candidateIDs) {
         const bounds = this._touchingBounds(drawableID);
         const result = [];
         if (bounds === null) {
@@ -1730,8 +1730,8 @@ class RenderWebGL extends EventEmitter {
      * @param {Array<object>} candidates info from _candidatesTouching
      * @return {Rectangle} the outer bounding box union
      */
-    _candidatesBounds (candidates) {
-        return candidates.reduce((memo, {intersection}) => {
+    _candidatesBounds(candidates) {
+        return candidates.reduce((memo, { intersection }) => {
             if (!memo) {
                 return intersection;
             }
@@ -1745,7 +1745,7 @@ class RenderWebGL extends EventEmitter {
      * @param {number} drawableID The drawable's id.
      * @param {number} skinId The skin to update to.
      */
-    updateDrawableSkinId (drawableID, skinId) {
+    updateDrawableSkinId(drawableID, skinId) {
         const drawable = this._allDrawables[drawableID];
         // TODO: https://github.com/LLK/scratch-vm/issues/2288
         if (!drawable) return;
@@ -1757,7 +1757,7 @@ class RenderWebGL extends EventEmitter {
      * @param {number} drawableID The drawable's id.
      * @param {Array.<number>} position The new position.
      */
-    updateDrawablePosition (drawableID, position) {
+    updateDrawablePosition(drawableID, position) {
         const drawable = this._allDrawables[drawableID];
         // TODO: https://github.com/LLK/scratch-vm/issues/2288
         if (!drawable) return;
@@ -1769,7 +1769,7 @@ class RenderWebGL extends EventEmitter {
      * @param {number} drawableID The drawable's id.
      * @param {number} direction A new direction.
      */
-    updateDrawableDirection (drawableID, direction) {
+    updateDrawableDirection(drawableID, direction) {
         const drawable = this._allDrawables[drawableID];
         // TODO: https://github.com/LLK/scratch-vm/issues/2288
         if (!drawable) return;
@@ -1781,7 +1781,7 @@ class RenderWebGL extends EventEmitter {
      * @param {number} drawableID The drawable's id.
      * @param {Array.<number>} scale A new scale.
      */
-    updateDrawableScale (drawableID, scale) {
+    updateDrawableScale(drawableID, scale) {
         const drawable = this._allDrawables[drawableID];
         // TODO: https://github.com/LLK/scratch-vm/issues/2288
         if (!drawable) return;
@@ -1794,7 +1794,7 @@ class RenderWebGL extends EventEmitter {
      * @param {number} direction A new direction.
      * @param {Array.<number>} scale A new scale.
      */
-    updateDrawableDirectionScale (drawableID, direction, scale) {
+    updateDrawableDirectionScale(drawableID, direction, scale) {
         const drawable = this._allDrawables[drawableID];
         // TODO: https://github.com/LLK/scratch-vm/issues/2288
         if (!drawable) return;
@@ -1807,7 +1807,7 @@ class RenderWebGL extends EventEmitter {
      * @param {number} drawableID The drawable's id.
      * @param {boolean} visible Will the drawable be visible?
      */
-    updateDrawableVisible (drawableID, visible) {
+    updateDrawableVisible(drawableID, visible) {
         const drawable = this._allDrawables[drawableID];
         // TODO: https://github.com/LLK/scratch-vm/issues/2288
         if (!drawable) return;
@@ -1820,7 +1820,7 @@ class RenderWebGL extends EventEmitter {
      * @param {string} effectName The effect to change.
      * @param {number} value A new effect value.
      */
-    updateDrawableEffect (drawableID, effectName, value) {
+    updateDrawableEffect(drawableID, effectName, value) {
         const drawable = this._allDrawables[drawableID];
         // TODO: https://github.com/LLK/scratch-vm/issues/2288
         if (!drawable) return;
@@ -1833,7 +1833,7 @@ class RenderWebGL extends EventEmitter {
      * @param {int} drawableID The ID of the Drawable to update.
      * @param {object.<string,*>} properties The new property values to set.
      */
-    updateDrawableProperties (drawableID, properties) {
+    updateDrawableProperties(drawableID, properties) {
         const drawable = this._allDrawables[drawableID];
         if (!drawable) {
             /**
@@ -1854,7 +1854,7 @@ class RenderWebGL extends EventEmitter {
      * @param {Array.<number, number>} position to be fenced - An array of type [x, y]
      * @return {Array.<number, number>} The fenced position as an array [x, y]
      */
-    getFencedPositionOfDrawable (drawableID, position) {
+    getFencedPositionOfDrawable(drawableID, position) {
         let x = position[0];
         let y = position[1];
 
@@ -1889,7 +1889,7 @@ class RenderWebGL extends EventEmitter {
      * Clear a pen layer.
      * @param {int} penSkinID - the unique ID of a Pen Skin.
      */
-    penClear (penSkinID) {
+    penClear(penSkinID) {
         this.dirty = true;
         const skin = /** @type {PenSkin} */ this._allSkins[penSkinID];
         skin.clear();
@@ -1902,7 +1902,7 @@ class RenderWebGL extends EventEmitter {
      * @param {number} x - the X coordinate of the point to draw.
      * @param {number} y - the Y coordinate of the point to draw.
      */
-    penPoint (penSkinID, penAttributes, x, y) {
+    penPoint(penSkinID, penAttributes, x, y) {
         this.dirty = true;
         const skin = /** @type {PenSkin} */ this._allSkins[penSkinID];
         skin.drawPoint(penAttributes, x, y);
@@ -1917,7 +1917,7 @@ class RenderWebGL extends EventEmitter {
      * @param {number} x1 - the X coordinate of the end of the line.
      * @param {number} y1 - the Y coordinate of the end of the line.
      */
-    penLine (penSkinID, penAttributes, x0, y0, x1, y1) {
+    penLine(penSkinID, penAttributes, x0, y0, x1, y1) {
         this.dirty = true;
         const skin = /** @type {PenSkin} */ this._allSkins[penSkinID];
         skin.drawLine(penAttributes, x0, y0, x1, y1);
@@ -1928,7 +1928,7 @@ class RenderWebGL extends EventEmitter {
      * @param {int} penSkinID - the unique ID of a Pen Skin.
      * @param {int} stampID - the unique ID of the Drawable to use as the stamp.
      */
-    penStamp (penSkinID, stampID) {
+    penStamp(penSkinID, stampID) {
         this.dirty = true;
         const stampDrawable = this._allDrawables[stampID];
         if (!stampDrawable) {
@@ -1990,7 +1990,7 @@ class RenderWebGL extends EventEmitter {
      * Build geometry (vertex and index) buffers.
      * @private
      */
-    _createGeometry () {
+    _createGeometry() {
         const quad = {
             a_position: {
                 numComponents: 2,
@@ -2025,14 +2025,14 @@ class RenderWebGL extends EventEmitter {
      * @param {object} event - The change event.
      * @private
      */
-    onNativeSizeChanged (event) {
+    onNativeSizeChanged(event) {
         this.dirty = true;
         const [width, height] = event.newSize;
 
         const gl = this._gl;
         const attachments = [
-            {format: gl.RGBA},
-            {format: gl.DEPTH_STENCIL}
+            { format: gl.RGBA },
+            { format: gl.DEPTH_STENCIL }
         ];
 
         if (!this._pickBufferInfo) {
@@ -2063,7 +2063,7 @@ class RenderWebGL extends EventEmitter {
      * @param {function} enter - handle to call when first entering a region
      * @param {function} exit - handle to call when leaving a region
      */
-    enterDrawRegion (regionId, enter = regionId.enter, exit = regionId.exit) {
+    enterDrawRegion(regionId, enter = regionId.enter, exit = regionId.exit) {
         if (this._regionId !== regionId) {
             this._doExitDrawRegion();
             this._regionId = regionId;
@@ -2076,7 +2076,7 @@ class RenderWebGL extends EventEmitter {
      * Forcefully exit the current region returning to a common inbetween GL
      * state.
      */
-    _doExitDrawRegion () {
+    _doExitDrawRegion() {
         if (this._exitRegion !== null) {
             this._exitRegion();
         }
@@ -2099,7 +2099,7 @@ class RenderWebGL extends EventEmitter {
      * @param {boolean} opts.skipPrivateSkins Do not draw private skins.
      * @private
      */
-    _drawThese (drawables, drawMode, projection, opts = {}) {
+    _drawThese(drawables, drawMode, projection, opts = {}) {
 
         const gl = this._gl;
         let currentShader = null;
@@ -2112,7 +2112,7 @@ class RenderWebGL extends EventEmitter {
         const numDrawables = drawables.length;
         for (let drawableIndex = 0; drawableIndex < numDrawables; ++drawableIndex) {
             const drawableID = drawables[drawableIndex];
-            if (!drawableID) continue;
+            if (typeof drawableID === 'undefined') continue;
 
             // If we have a filter, check whether the ID fails
             if (opts.filter && !opts.filter(drawableID)) continue;
@@ -2170,8 +2170,8 @@ class RenderWebGL extends EventEmitter {
             if (uniforms.u_skin) {
                 twgl.setTextureParameters(
                     gl, uniforms.u_skin, {
-                        minMag: drawable.skin.useNearest(drawableScale, drawable) ? gl.NEAREST : gl.LINEAR
-                    }
+                    minMag: drawable.skin.useNearest(drawableScale, drawable) ? gl.NEAREST : gl.LINEAR
+                }
                 );
             }
 
@@ -2188,7 +2188,7 @@ class RenderWebGL extends EventEmitter {
      * @param {int} drawableID The Drawable IDs calculate convex hull for.
      * @return {Array<Array<number>>} points Convex hull points, as [[x, y], ...]
      */
-    _getConvexHullPointsForDrawable (drawableID) {
+    _getConvexHullPointsForDrawable(drawableID) {
         const drawable = this._allDrawables[drawableID];
 
         const [width, height] = drawable.skin.size;
@@ -2325,7 +2325,7 @@ class RenderWebGL extends EventEmitter {
      * @param {Uint8ClampedArray} dst The color3b space to store the answer in.
      * @return {Uint8ClampedArray} The dst vector with everything blended down.
      */
-    sampleColor4b (vec, drawables, dst) {
+    sampleColor4b(vec, drawables, dst) {
         dst = dst || new Uint8ClampedArray(4);
         dst[0] = 0;
         dst[1] = 0;
@@ -2365,7 +2365,7 @@ class RenderWebGL extends EventEmitter {
     /**
      * @param {snapshotCallback} callback Function called in the next frame with the snapshot data
      */
-    requestSnapshot (callback) {
+    requestSnapshot(callback) {
         this.dirty = true;
         this._snapshotCallbacks.push(callback);
     }
@@ -2376,7 +2376,7 @@ class RenderWebGL extends EventEmitter {
      * statements do not contain malicious styles.
      * @param {Record<string, string>} customFonts Maps full font families (with fallbacks) to @font-face statements.
      */
-    setCustomFonts (customFonts) {
+    setCustomFonts(customFonts) {
         this.customFonts = customFonts;
         const css = Object.values(customFonts).join('\n');
 
