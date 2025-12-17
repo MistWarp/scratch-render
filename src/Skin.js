@@ -155,11 +155,37 @@ class Skin {
     _setTexture (textureData) {
         const gl = this._renderer.gl;
 
+        const width = textureData.width;
+        const height = textureData.height;
+
         gl.bindTexture(gl.TEXTURE_2D, this._texture);
         // Premultiplied alpha is necessary for proper blending.
         // See http://www.realtimerendering.com/blog/gpus-prefer-premultiplication/
         gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, textureData);
+
+        if (this._texWidth !== width || this._texHeight !== height) {
+            this._texWidth = width;
+            this._texHeight = height;
+
+            gl.texImage2D(
+                gl.TEXTURE_2D,
+                0,
+                gl.RGBA,
+                gl.RGBA,
+                gl.UNSIGNED_BYTE,
+                textureData
+            );
+        } else {
+            gl.texSubImage2D(
+                gl.TEXTURE_2D,
+                0,
+                0,
+                0,
+                gl.RGBA,
+                gl.UNSIGNED_BYTE,
+                textureData
+            );
+        }
         gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
 
         this._silhouette.update(textureData);
