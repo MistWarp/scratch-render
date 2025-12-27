@@ -1929,6 +1929,23 @@ class RenderWebGL extends EventEmitter {
     }
 
     /**
+     * Draw a triangle on a pen layer.
+     * @param {int} penSkinID - the unique ID of a Pen Skin.
+     * @param {int} penAttributes - the Pen Attributes to use.
+     * @param {number} x0 - the X coordinate of the first point of the triangle.
+     * @param {number} y0 - the Y coordinate of the first point of the triangle.
+     * @param {number} x1 - the X coordinate of the second point of the triangle.
+     * @param {number} y1 - the Y coordinate of the second point of the triangle.
+     * @param {number} x2 - the X coordinate of the third point of the triangle.
+     * @param {number} y2 - the Y coordinate of the third point of the triangle.
+     */
+    penTriangle(penSkinID, penAttributes, x0, y0, x1, y1, x2, y2) {
+        this.dirty = true;
+        const skin = /** @type {PenSkin} */ this._allSkins[penSkinID];
+        skin.drawTriangle(penAttributes, x0, y0, x1, y1, x2, y2);
+    }
+
+    /**
      * Stamp a Drawable onto a pen layer.
      * @param {int} penSkinID - the unique ID of a Pen Skin.
      * @param {int} stampID - the unique ID of the Drawable to use as the stamp.
