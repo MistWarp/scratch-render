@@ -426,65 +426,68 @@ class PenSkin extends Skin {
 
     /**
      * @param {PenAttributes} penAttributes - how the triangle should be drawn.
-     * @param {number} x0 - the X coordinate of the first vertex.
-     * @param {number} y0 - the Y coordinate of the first vertex.
-     * @param {number} x1 - the X coordinate of the second vertex.
-     * @param {number} y1 - the Y coordinate of the second vertex.
-     * @param {number} x2 - the X coordinate of the third vertex.
-     * @param {number} y2 - the Y coordinate of the third vertex.
+     * @param {number} x1 - the X coordinate of the first vertex.
+     * @param {number} y1 - the Y coordinate of the first vertex.
+     * @param {number} x2 - the X coordinate of the second vertex.
+     * @param {number} y2 - the Y coordinate of the second vertex.
+     * @param {number} x3 - the X coordinate of the third vertex.
+     * @param {number} y3 - the Y coordinate of the third vertex.
      */
-    _drawTriangleOnBuffer (penAttributes, x0, y0, x1, y1, x2, y2) {
-        const gl = this._renderer.gl;
+    _drawTriangleOnBuffer (penAttributes, x1, y1, x2, y2, x3, y3) {
+        this._renderer.enterDrawRegion(this._usePenBufferDrawRegionId);
 
+        const gl = this._renderer.gl;
         const width = this._size[0];
         const height = this._size[1];
 
-        // Bind the pen framebuffer and set viewport
-        twgl.bindFramebufferInfo(gl, this._framebuffer);
         gl.viewport(0, 0, width, height);
 
-        // Use the background shader which outputs a solid color per-fragment
-        const bgShader = this._renderer._shaderManager.getShader(ShaderManager.DRAW_MODE.background, 0);
-        gl.useProgram(bgShader.program);
+        const shader = this._renderer._shaderManager.getShader(
+            ShaderManager.DRAW_MODE.background,
+            0
+        );
+        gl.useProgram(shader.program);
 
-        // Set the background color uniform (use premultiplied alpha to match pen blending)
-        const color4f = penAttributes.color4f || DefaultPenAttributes.color4f;
-        const premult = [color4f[0] * color4f[3], color4f[1] * color4f[3], color4f[2] * color4f[3], color4f[3]];
-        twgl.setUniforms(bgShader, {u_backgroundColor: premult});
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
-        // Build a small vertex buffer with three positions transformed into the shader's expected a_position range
-        // a_position expected range is [-0.5,0.5] (vertex shader multiplies by 2.0)
-        const vx = new Float32Array([
-            x0 / width, -y0 / height,
-            x1 / width, -y1 / height,
-            x2 / width, -y2 / height
+        const c = penAttributes.color4f || DefaultPenAttributes.color4f;
+        const color = [
+            c[0] * c[3],
+            c[1] * c[3],
+            c[2] * c[3],
+            c[3]
+        ];
+
+        twgl.setUniforms(shader, {
+            u_backgroundColor: color
+        });
+
+        const toBackgroundPositionX = x => (x / width);
+        const toBackgroundPositionY = y => (-y / height);
+
+        const vertices = new Float32Array([
+            toBackgroundPositionX(x1), toBackgroundPositionY(y1),
+            toBackgroundPositionX(x2), toBackgroundPositionY(y2),
+            toBackgroundPositionX(x3), toBackgroundPositionY(y3)
         ]);
 
-        const triBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, triBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, vx, gl.STREAM_DRAW);
+        const buffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+        gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STREAM_DRAW);
 
-        const aPositionLoc = gl.getAttribLocation(bgShader.program, 'a_position');
-        gl.enableVertexAttribArray(aPositionLoc);
-        gl.vertexAttribPointer(aPositionLoc, 2, gl.FLOAT, false, 0, 0);
+        const loc = gl.getAttribLocation(shader.program, 'a_position');
+        gl.enableVertexAttribArray(loc);
+        gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
 
-        // Draw the triangle into the pen framebuffer
         gl.drawArrays(gl.TRIANGLES, 0, 3);
 
-        // Clean up
-        gl.disableVertexAttribArray(aPositionLoc);
+        gl.disableVertexAttribArray(loc);
         gl.bindBuffer(gl.ARRAY_BUFFER, null);
-        try {
-            gl.deleteBuffer(triBuffer);
-        } catch (e) {
-            // ignore
-        }
-
-        // Restore default framebuffer binding
-        twgl.bindFramebufferInfo(gl, null);
-
+        gl.deleteBuffer(buffer);
         this._silhouetteDirty = true;
     }
+
 
     _flushLines () {
         /** @type {WebGLRenderingContext} */
