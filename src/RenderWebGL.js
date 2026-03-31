@@ -1,3 +1,5 @@
+/* eslint-disable object-curly-spacing */
+/* eslint-disable space-before-function-paren */
 const EventEmitter = require('events');
 
 const hull = require('@turbowarp/ancient-hull.js');
@@ -1111,7 +1113,8 @@ class RenderWebGL extends EventEmitter {
 
         // if there are just too many pixels to CPU render efficiently, we need to let readPixels happen
         if (bounds.width * bounds.height * (candidates.length + 1) >= maxPixelsForCPU) {
-            this._isTouchingColorGpuStart(drawableID, candidates.map(({ id }) => id).reverse(), bounds, color3b, mask3b);
+            const result = candidates.map(({ id }) => id).reverse();
+            this._isTouchingColorGpuStart(drawableID, result, bounds, color3b, mask3b);
         }
 
         const drawable = this._allDrawables[drawableID];
@@ -1236,7 +1239,7 @@ class RenderWebGL extends EventEmitter {
 
             // Draw the candidate drawables on top of the background.
             this._drawThese(candidateIDs, ShaderManager.DRAW_MODE.default, projection,
-                { idFilterFunc: testID => testID !== drawableID }
+                { filter: testID => testID !== drawableID, skipCulling: true }
             );
         } finally {
             gl.colorMask(true, true, true, true);
@@ -2203,8 +2206,8 @@ class RenderWebGL extends EventEmitter {
             if (uniforms.u_skin) {
                 twgl.setTextureParameters(
                     gl, uniforms.u_skin, {
-                    minMag: drawable.skin.useNearest(drawableScale, drawable) ? gl.NEAREST : gl.LINEAR
-                }
+                        minMag: drawable.skin.useNearest(drawableScale, drawable) ? gl.NEAREST : gl.LINEAR
+                    }
                 );
             }
 
