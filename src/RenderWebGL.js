@@ -886,24 +886,9 @@ class RenderWebGL extends EventEmitter {
         if (oldIndex < endIndex) {
             if (order === 0) return oldIndex;
 
-            if (useRealLayers) {
-                delete this._drawList[oldIndex];
-            } else {
-                this._drawList.splice(oldIndex, 1);
-            }
-
             let newIndex = order;
             if (optIsRelative) {
                 newIndex += oldIndex;
-
-                if (order > 0 && useRealLayers && newIndex < this._drawList.length) {
-                    if (newIndex in this._drawList) {
-                        const temp = this._drawList[newIndex];
-                        this._drawList[newIndex] = drawableID;
-                        this._drawList[oldIndex] = temp;
-                        return newIndex;
-                    }
-                }
             }
 
             const possibleMin = (optMin || 0) + startIndex;
@@ -911,16 +896,32 @@ class RenderWebGL extends EventEmitter {
             newIndex = Math.max(newIndex, min);
 
             if (useRealLayers) {
-                if (newIndex >= this._drawList.length) {
-                    this._drawList.length++;
+                // A drawable's slot in the draw list is its layer, so the list is allowed to be
+                // sparse and may hold more layers than there are drawables. Shift the drawables
+                // we move past by one rather than splicing, which would renumber every layer
+                // above this one and grow the list on every call.
+                if (!Number.isFinite(newIndex)) {
+                    // "go to front": the first free slot above the topmost occupied one. The
+                    // drawable being moved doesn't count, or repeated calls would climb forever.
+                    let top = startIndex - 1;
+                    for (let i = startIndex; i < this._drawList.length; i++) {
+                        if (i !== oldIndex && typeof this._drawList[i] !== 'undefined') top = i;
+                    }
+                    newIndex = top + 1;
                 }
 
-                if (typeof this._drawList[newIndex] === 'undefined') {
-                    this._drawList[newIndex] = drawableID;
+                if (newIndex >= this._drawList.length) {
+                    // Above every occupied slot, so there is nothing to shift past.
+                    delete this._drawList[oldIndex];
                 } else {
-                    this._drawList.splice(newIndex, 0, drawableID);
+                    const step = newIndex > oldIndex ? 1 : -1;
+                    for (let i = oldIndex; i !== newIndex; i += step) {
+                        this._drawList[i] = this._drawList[i + step];
+                    }
                 }
+                this._drawList[newIndex] = drawableID;
             } else {
+                this._drawList.splice(oldIndex, 1);
                 newIndex = Math.min(newIndex, endIndex);
                 this._drawList.splice(newIndex, 0, drawableID);
             }
@@ -936,7 +937,8 @@ class RenderWebGL extends EventEmitter {
         for (let i = 0; i < this._drawList.length; i++) {
             const drawableId = this._drawList[i];
             const drawable = this._allDrawables[drawableId];
-            if (drawable._skin === skin) {
+            // The draw list is sparse when real layer indexes are enabled.
+            if (drawable && drawable._skin === skin) {
                 drawable._skinWasAltered();
             }
         }
@@ -1156,13 +1158,13 @@ class RenderWebGL extends EventEmitter {
 
     _getMaxPixelsForCPU() {
         switch (this._useGpuMode) {
-            case RenderWebGL.UseGpuModes.ForceCPU:
-                return Infinity;
-            case RenderWebGL.UseGpuModes.ForceGPU:
-                return 0;
-            case RenderWebGL.UseGpuModes.Automatic:
-            default:
-                return __cpuTouchingColorPixelCount;
+        case RenderWebGL.UseGpuModes.ForceCPU:
+            return Infinity;
+        case RenderWebGL.UseGpuModes.ForceGPU:
+            return 0;
+        case RenderWebGL.UseGpuModes.Automatic:
+        default:
+            return __cpuTouchingColorPixelCount;
         }
     }
 

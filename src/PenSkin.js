@@ -79,6 +79,12 @@ class PenSkin extends Skin {
         /** @type {twgl.ProgramInfo} */
         this._lineShader = this._renderer._shaderManager.getShader(ShaderManager.DRAW_MODE.line, NO_EFFECTS);
 
+        /** @type {twgl.ProgramInfo} */
+        this._triangleShader = this._renderer._shaderManager.getShader(ShaderManager.DRAW_MODE.background, NO_EFFECTS);
+        this._triangle_glbuffer = gl.createBuffer();
+        this._triangle_loc = gl.getAttribLocation(this._triangleShader.program, 'a_position');
+        this._triangle_vertices = new Float32Array(6);
+
         // Draw region used to preserve texture when resizing
         this._drawTextureShader = this._renderer._shaderManager.getShader(ShaderManager.DRAW_MODE.default, NO_EFFECTS);
         /** @type {object} */
@@ -442,10 +448,7 @@ class PenSkin extends Skin {
 
         gl.viewport(0, 0, width, height);
 
-        const shader = this._renderer._shaderManager.getShader(
-            ShaderManager.DRAW_MODE.background,
-            0
-        );
+        const shader = this._triangleShader;
         gl.useProgram(shader.program);
 
         gl.enable(gl.BLEND);
@@ -463,20 +466,17 @@ class PenSkin extends Skin {
             u_backgroundColor: color
         });
 
-        const toBackgroundPositionX = x => (x / width);
-        const toBackgroundPositionY = y => (-y / height);
+        const vertices = this._triangle_vertices;
+        vertices[0] = x1 / width;
+        vertices[1] = -y1 / height;
+        vertices[2] = x2 / width;
+        vertices[3] = -y2 / height;
+        vertices[4] = x3 / width;
+        vertices[5] = -y3 / height;
 
-        const vertices = new Float32Array([
-            toBackgroundPositionX(x1), toBackgroundPositionY(y1),
-            toBackgroundPositionX(x2), toBackgroundPositionY(y2),
-            toBackgroundPositionX(x3), toBackgroundPositionY(y3)
-        ]);
-
-        const buffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+        const loc = this._triangle_loc;
+        gl.bindBuffer(gl.ARRAY_BUFFER, this._triangle_glbuffer);
         gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STREAM_DRAW);
-
-        const loc = gl.getAttribLocation(shader.program, 'a_position');
         gl.enableVertexAttribArray(loc);
         gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
 
@@ -484,7 +484,6 @@ class PenSkin extends Skin {
 
         gl.disableVertexAttribArray(loc);
         gl.bindBuffer(gl.ARRAY_BUFFER, null);
-        gl.deleteBuffer(buffer);
         this._silhouetteDirty = true;
     }
 
