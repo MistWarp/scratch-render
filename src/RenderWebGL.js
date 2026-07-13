@@ -223,6 +223,9 @@ class RenderWebGL extends EventEmitter {
         /** @type {ShaderManager} */
         this._shaderManager = new ShaderManager(gl);
 
+        // Texture filtering is texture state, so only update it when the requested mode changes.
+        this._textureFilterModes = new WeakMap();
+
         /** @type {any} */
         this._regionId = null;
 
@@ -2139,6 +2142,9 @@ class RenderWebGL extends EventEmitter {
         const gl = this._gl;
         let currentShader = null;
 
+        gl.activeTexture(gl.TEXTURE0);
+        if (gl.bindSampler) gl.bindSampler(0, null);
+
         const framebufferSpaceScaleDiffers = (
             'framebufferWidth' in opts && 'framebufferHeight' in opts &&
             opts.framebufferWidth !== this._nativeSize[0] && opts.framebufferHeight !== this._nativeSize[1]
@@ -2173,8 +2179,8 @@ class RenderWebGL extends EventEmitter {
             // Skip private skins, if requested.
             if (opts.skipPrivateSkins && drawable.skin.private) continue;
 
-            // Skip drawables with a skin that does not have a texture.
-            if (!drawable.skin.getTexture(drawableScale)) continue;
+            const skinUniforms = drawable.skin.getUniforms(drawableScale);
+            if (!skinUniforms.u_skin) continue;
 
             const uniforms = {};
 
@@ -2191,13 +2197,14 @@ class RenderWebGL extends EventEmitter {
                 currentShader = newShader;
                 gl.useProgram(currentShader.program);
                 twgl.setBuffersAndAttributes(gl, currentShader, this._bufferInfo);
+                gl.uniform1i(currentShader.uniformSetters.u_skin.location, 0);
                 Object.assign(uniforms, {
                     u_projectionMatrix: projection
                 });
             }
 
             Object.assign(uniforms,
-                drawable.skin.getUniforms(drawableScale),
+                skinUniforms,
                 drawable.getUniforms());
 
             // Apply extra uniforms after the Drawable's, to allow overwriting.
@@ -2205,19 +2212,25 @@ class RenderWebGL extends EventEmitter {
                 Object.assign(uniforms, opts.extraUniforms);
             }
 
-            if (uniforms.u_skin) {
-                twgl.setTextureParameters(
-                    gl, uniforms.u_skin, {
-                        minMag: drawable.skin.useNearest(drawableScale, drawable) ? gl.NEAREST : gl.LINEAR
-                    }
-                );
-            }
+            const texture = uniforms.u_skin;
+            delete uniforms.u_skin;
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+            this._setTextureFilter(texture,
+                drawable.skin.useNearest(drawableScale, drawable) ? gl.NEAREST : gl.LINEAR);
 
             twgl.setUniforms(currentShader, uniforms);
-            twgl.drawBufferInfo(gl, this._bufferInfo, gl.TRIANGLES);
+            gl.drawArrays(gl.TRIANGLES, 0, this._bufferInfo.numElements);
         }
 
         this._regionId = null;
+    }
+
+    _setTextureFilter(texture, filter) {
+        if (this._textureFilterModes.get(texture) === filter) return;
+        const gl = this._gl;
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
+        this._textureFilterModes.set(texture, filter);
     }
 
     /**
