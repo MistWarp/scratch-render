@@ -609,8 +609,8 @@ class PenSkin extends Skin {
             this._drawPenTexture(oldTexture);
         }
 
-        this._silhouettePixels = new Uint8Array(Math.floor(width * height * 4));
         this._silhouetteImageData = new ImageData(width, height);
+        this._silhouettePixels = new Uint8Array(this._silhouetteImageData.data.buffer);
 
         this._silhouetteDirty = true;
     }
@@ -639,7 +639,6 @@ class PenSkin extends Skin {
                 gl.RGBA, gl.UNSIGNED_BYTE, this._silhouettePixels
             );
 
-            this._silhouetteImageData.data.set(this._silhouettePixels);
             this._silhouette.update(this._silhouetteImageData, true /* isPremultiplied */);
 
             this._silhouetteDirty = false;

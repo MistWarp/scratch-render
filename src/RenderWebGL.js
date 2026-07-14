@@ -21,9 +21,12 @@ const log = require('./util/log');
 
 const __isTouchingDrawablesPoint = twgl.v3.create();
 const __candidatesBounds = new Rectangle();
+const __candidateBounds = new Rectangle();
 const __fenceBounds = new Rectangle();
 const __touchingColor = new Uint8ClampedArray(4);
 const __blendColor = new Uint8ClampedArray(4);
+const __drawableScale = [0, 0];
+const __projectionUniforms = {u_projectionMatrix: null};
 
 // More pixels than this and we give up to the GPU and take the cost of readPixels
 // Width * Height * Number of drawables at location
@@ -791,10 +794,6 @@ class RenderWebGL extends EventEmitter {
         }
     }
 
-    get _visibleDrawList() {
-        return this._drawList.filter(id => this._allDrawables[id]._visible);
-    }
-
     // Given a layer group, return the index where it ends (non-inclusive),
     // e.g. the returned index does not have a drawable from this layer group in it)
     _endIndexForKnownLayerGroup(layerGroup) {
@@ -1091,7 +1090,7 @@ class RenderWebGL extends EventEmitter {
      * @returns {boolean} True iff the Drawable is touching the color.
      */
     isTouchingColor(drawableID, color3b, mask3b) {
-        const candidates = this._candidatesTouching(drawableID, this._visibleDrawList);
+        const candidates = this._candidatesTouching(drawableID, this._drawList);
 
         let bounds;
         if (colorMatches(color3b, this._backgroundColor3b, 0)) {
@@ -1289,15 +1288,10 @@ class RenderWebGL extends EventEmitter {
             return false;
         }
 
-        const candidates = this._candidatesTouching(drawableID,
-            // even if passed an invisible drawable, we will NEVER touch it!
-            candidateIDs.filter(id => this._allDrawables[id]._visible));
+        const candidates = this._candidatesTouching(drawableID, candidateIDs);
         if (candidates.length === 0) {
             return false;
         }
-
-        // Get the union of all the candidates intersections.
-        const bounds = this._candidatesBounds(candidates);
 
         const drawable = this._allDrawables[drawableID];
         const point = __isTouchingDrawablesPoint;
@@ -1306,16 +1300,16 @@ class RenderWebGL extends EventEmitter {
 
         // This is an EXTREMELY brute force collision detector, but it is
         // still faster than asking the GPU to give us the pixels.
-        for (let x = bounds.left; x <= bounds.right; x++) {
-            // Scratch Space - +y is top
-            point[0] = x;
-            for (let y = bounds.bottom; y <= bounds.top; y++) {
-                point[1] = y;
-                if (drawable.isTouching(point)) {
-                    for (let index = 0; index < candidates.length; index++) {
-                        if (candidates[index].drawable.isTouching(point)) {
-                            return true;
-                        }
+        for (let index = 0; index < candidates.length; index++) {
+            const candidate = candidates[index].drawable;
+            const intersection = candidates[index].intersection;
+            for (let x = intersection.left; x <= intersection.right; x++) {
+                // Scratch Space - +y is top
+                point[0] = x;
+                for (let y = intersection.bottom; y <= intersection.top; y++) {
+                    point[1] = y;
+                    if (drawable.isTouching(point) && candidate.isTouching(point)) {
+                        return true;
                     }
                 }
             }
@@ -1707,6 +1701,7 @@ class RenderWebGL extends EventEmitter {
             const id = candidateIDs[index];
             if (id !== drawableID) {
                 const drawable = this._allDrawables[id];
+                if (!drawable) continue;
                 // Text bubbles aren't considered in "touching" queries
                 if (drawable.skin instanceof TextBubbleSkin) continue;
                 if (drawable.skin && drawable._visible) {
@@ -1714,9 +1709,7 @@ class RenderWebGL extends EventEmitter {
                     // contents of a private skin.
                     if (!this.allowPrivateSkinAccess && drawable.skin.private) continue;
 
-                    // Update the CPU position data
-                    drawable.updateCPURenderAttributes();
-                    const candidateBounds = drawable.getFastBounds();
+                    const candidateBounds = drawable.getFastBounds(__candidateBounds);
 
                     // Push bounds out to integers. If a drawable extends out into half a pixel, that half-pixel still
                     // needs to be tested. Plus, in some areas we construct another rectangle from the union of these,
@@ -1725,6 +1718,8 @@ class RenderWebGL extends EventEmitter {
                     candidateBounds.snapToInt();
 
                     if (bounds.intersects(candidateBounds)) {
+                        // Update the CPU position data
+                        drawable.updateCPURenderAttributes();
                         result.push({
                             id,
                             drawable,
@@ -2165,24 +2160,25 @@ class RenderWebGL extends EventEmitter {
             // the ignoreVisibility flag is used (e.g. for stamping or touchingColor).
             if (!drawable.getVisible() && !opts.ignoreVisibility) continue;
 
+            // Skip drawables with no skin.
+            const skin = drawable.skin;
+            if (!skin) continue;
+
+            // Skip private skins, if requested.
+            if (opts.skipPrivateSkins && skin.private) continue;
+
             // drawableScale is the "framebuffer-pixel-space" scale of the drawable, as percentages of the drawable's
             // "native size" (so 100 = same as skin's "native size", 200 = twice "native size").
             // If the framebuffer dimensions are the same as the stage's "native" size, there's no need to calculate it.
-            const drawableScale = framebufferSpaceScaleDiffers ? [
-                drawable.scale[0] * opts.framebufferWidth / this._nativeSize[0],
-                drawable.scale[1] * opts.framebufferHeight / this._nativeSize[1]
-            ] : drawable.scale;
+            let drawableScale = drawable._scale;
+            if (framebufferSpaceScaleDiffers) {
+                __drawableScale[0] = drawableScale[0] * opts.framebufferWidth / this._nativeSize[0];
+                __drawableScale[1] = drawableScale[1] * opts.framebufferHeight / this._nativeSize[1];
+                drawableScale = __drawableScale;
+            }
 
-            // Skip drawables with no skin.
-            if (!drawable.skin) continue;
-
-            // Skip private skins, if requested.
-            if (opts.skipPrivateSkins && drawable.skin.private) continue;
-
-            const skinUniforms = drawable.skin.getUniforms(drawableScale);
-            if (!skinUniforms.u_skin) continue;
-
-            const uniforms = {};
+            const texture = skin.getTexture(drawableScale);
+            if (!texture) continue;
 
             let effectBits = drawable.enabledEffects;
             effectBits &= Object.prototype.hasOwnProperty.call(opts, 'effectMask') ? opts.effectMask : effectBits;
@@ -2198,27 +2194,24 @@ class RenderWebGL extends EventEmitter {
                 gl.useProgram(currentShader.program);
                 twgl.setBuffersAndAttributes(gl, currentShader, this._bufferInfo);
                 gl.uniform1i(currentShader.uniformSetters.u_skin.location, 0);
-                Object.assign(uniforms, {
-                    u_projectionMatrix: projection
-                });
+                __projectionUniforms.u_projectionMatrix = projection;
+                twgl.setUniforms(currentShader, __projectionUniforms);
             }
 
-            Object.assign(uniforms,
-                skinUniforms,
-                drawable.getUniforms());
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+            this._setTextureFilter(texture,
+                skin.useNearest(drawableScale, drawable) ? gl.NEAREST : gl.LINEAR);
+
+            twgl.setUniforms(currentShader, drawable.getUniforms());
+
+            const skinSizeSetter = currentShader.uniformSetters.u_skinSize;
+            if (skinSizeSetter) skinSizeSetter(skin.size);
 
             // Apply extra uniforms after the Drawable's, to allow overwriting.
             if (opts.extraUniforms) {
-                Object.assign(uniforms, opts.extraUniforms);
+                twgl.setUniforms(currentShader, opts.extraUniforms);
             }
 
-            const texture = uniforms.u_skin;
-            delete uniforms.u_skin;
-            gl.bindTexture(gl.TEXTURE_2D, texture);
-            this._setTextureFilter(texture,
-                drawable.skin.useNearest(drawableScale, drawable) ? gl.NEAREST : gl.LINEAR);
-
-            twgl.setUniforms(currentShader, uniforms);
             gl.drawArrays(gl.TRIANGLES, 0, this._bufferInfo.numElements);
         }
 
@@ -2285,6 +2278,7 @@ class RenderWebGL extends EventEmitter {
 
         const _pixelPos = twgl.v3.create();
         const _effectPos = twgl.v3.create();
+        const hasEffects = drawable.enabledEffects !== 0;
 
         let currentPoint;
 
@@ -2297,8 +2291,8 @@ class RenderWebGL extends EventEmitter {
             let x = 0;
             for (; x < width; x++) {
                 _pixelPos[0] = x / width;
-                EffectTransform.transformPoint(drawable, _pixelPos, _effectPos);
-                if (drawable.skin.isTouchingLinear(_effectPos)) {
+                if (drawable.skin.isTouchingLinear(hasEffects ?
+                    EffectTransform.transformPoint(drawable, _pixelPos, _effectPos) : _pixelPos)) {
                     currentPoint = [x, y];
                     break;
                 }
@@ -2334,8 +2328,8 @@ class RenderWebGL extends EventEmitter {
             // Now we repeat the process for the right side, looking leftwards for a pixel.
             for (x = width - 1; x >= 0; x--) {
                 _pixelPos[0] = x / width;
-                EffectTransform.transformPoint(drawable, _pixelPos, _effectPos);
-                if (drawable.skin.isTouchingLinear(_effectPos)) {
+                if (drawable.skin.isTouchingLinear(hasEffects ?
+                    EffectTransform.transformPoint(drawable, _pixelPos, _effectPos) : _pixelPos)) {
                     currentPoint = [x, y];
                     break;
                 }

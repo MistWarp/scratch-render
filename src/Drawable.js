@@ -12,6 +12,8 @@ const log = require('./util/log');
  * @type {twgl.v3}
  */
 const __isTouchingPosition = twgl.v3.create();
+const __hullProjection = twgl.m4.ortho(-1, 1, -1, 1, -1, 1);
+const __hullTransform = twgl.m4.identity();
 const FLOATING_POINT_ERROR_ALLOWANCE = 1e-6;
 
 /**
@@ -613,11 +615,10 @@ class Drawable {
             return this._transformedHullPoints;
         }
 
-        const projection = twgl.m4.ortho(-1, 1, -1, 1, -1, 1);
         const skinSize = this.skin.size;
         const halfXPixel = 1 / skinSize[0] / 2;
         const halfYPixel = 1 / skinSize[1] / 2;
-        const tm = twgl.m4.multiply(this._uniforms.u_modelMatrix, projection);
+        const tm = twgl.m4.multiply(this._uniforms.u_modelMatrix, __hullProjection, __hullTransform);
         for (let i = 0; i < this._convexHullPoints.length; i++) {
             const point = this._convexHullPoints[i];
             const dstPoint = this._transformedHullPoints[i];
