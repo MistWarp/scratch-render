@@ -53,6 +53,12 @@ class Skin {
          * Whether this skin might include private information about the user.
          */
         this.private = false;
+
+        /**
+         * Drawables currently using this skin, maintained by the Drawable skin setter.
+         * @type {Set<Drawable>}
+         */
+        this.attachedDrawables = new Set();
     }
 
     /**

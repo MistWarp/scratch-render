@@ -54,6 +54,14 @@ class PenSkin extends Skin {
         /** @type {ImageData} */
         this._silhouetteImageData = null;
 
+        this._dirtyLeft = 0;
+        this._dirtyRight = 0;
+        this._dirtyBottom = 0;
+        this._dirtyTop = 0;
+
+        /** @type {Uint8Array} */
+        this._partialSilhouettePixels = null;
+
         /** @type {object} */
         this._lineOnBufferDrawRegionId = {
             enter: () => this._enterDrawLineOnBuffer(),
@@ -206,7 +214,22 @@ class PenSkin extends Skin {
         gl.clearColor(0, 0, 0, 0);
         gl.clear(gl.COLOR_BUFFER_BIT);
 
-        this._silhouetteDirty = true;
+        this._markSilhouetteDirty(0, this._size[0], 0, this._size[1]);
+    }
+
+    _markSilhouetteDirty (left, right, bottom, top) {
+        if (this._silhouetteDirty) {
+            this._dirtyLeft = Math.min(this._dirtyLeft, left);
+            this._dirtyRight = Math.max(this._dirtyRight, right);
+            this._dirtyBottom = Math.min(this._dirtyBottom, bottom);
+            this._dirtyTop = Math.max(this._dirtyTop, top);
+        } else {
+            this._silhouetteDirty = true;
+            this._dirtyLeft = left;
+            this._dirtyRight = right;
+            this._dirtyBottom = bottom;
+            this._dirtyTop = top;
+        }
     }
 
     /**
@@ -236,8 +259,6 @@ class PenSkin extends Skin {
             x1 * this.renderQuality, y1 * this.renderQuality,
             x2 * this.renderQuality, y2 * this.renderQuality
         );
-
-        this._silhouetteDirty = true;
     }
 
     /**
@@ -259,8 +280,6 @@ class PenSkin extends Skin {
             x0 + offset, y0 + offset,
             x1 + offset, y1 + offset
         );
-
-        this._silhouetteDirty = true;
     }
 
     /**
@@ -402,6 +421,16 @@ class PenSkin extends Skin {
         // tw: apply renderQuality
         const lineThickness = (penAttributes.diameter || DefaultPenAttributes.diameter) * this.renderQuality;
 
+        const dirtyRadius = (lineThickness * 0.5) + 2;
+        const halfWidth = this._size[0] * 0.5;
+        const halfHeight = this._size[1] * 0.5;
+        this._markSilhouetteDirty(
+            halfWidth + Math.min(x0, x1) - dirtyRadius,
+            halfWidth + Math.max(x0, x1) + dirtyRadius,
+            halfHeight - Math.max(y0, y1) - dirtyRadius,
+            halfHeight - Math.min(y0, y1) + dirtyRadius
+        );
+
         for (let i = 0; i < iters; i++) {
             // Pen color sent to the GPU is pre-multiplied by transparency
             this.attribute_data[this.attribute_index] = penColor[0] * penColor[3];
@@ -484,7 +513,12 @@ class PenSkin extends Skin {
 
         gl.disableVertexAttribArray(loc);
         gl.bindBuffer(gl.ARRAY_BUFFER, null);
-        this._silhouetteDirty = true;
+        this._markSilhouetteDirty(
+            (width * 0.5) + Math.min(x1, x2, x3) - 2,
+            (width * 0.5) + Math.max(x1, x2, x3) + 2,
+            (height * 0.5) - Math.max(y1, y2, y3) - 2,
+            (height * 0.5) - Math.min(y1, y2, y3) + 2
+        );
     }
 
 
@@ -535,7 +569,6 @@ class PenSkin extends Skin {
         }
 
         this.attribute_index = 0;
-        this._silhouetteDirty = true;
     }
 
     /**
@@ -612,7 +645,7 @@ class PenSkin extends Skin {
         this._silhouetteImageData = new ImageData(width, height);
         this._silhouettePixels = new Uint8Array(this._silhouetteImageData.data.buffer);
 
-        this._silhouetteDirty = true;
+        this._markSilhouetteDirty(0, width, 0, height);
     }
 
     // tw: sets the "quality" of the pen skin
@@ -630,14 +663,41 @@ class PenSkin extends Skin {
      */
     updateSilhouette () {
         if (this._silhouetteDirty) {
+            const width = this._size[0];
+            const height = this._size[1];
+            const left = Math.max(0, Math.floor(this._dirtyLeft));
+            const right = Math.min(width, Math.ceil(this._dirtyRight));
+            const bottom = Math.max(0, Math.floor(this._dirtyBottom));
+            const top = Math.min(height, Math.ceil(this._dirtyTop));
+
             this._renderer.enterDrawRegion(this._usePenBufferDrawRegionId);
             // Sample the framebuffer's pixels into the silhouette instance
             const gl = this._renderer.gl;
-            gl.readPixels(
-                0, 0,
-                this._size[0], this._size[1],
-                gl.RGBA, gl.UNSIGNED_BYTE, this._silhouettePixels
-            );
+            if (left === 0 && bottom === 0 && right === width && top === height) {
+                gl.readPixels(
+                    0, 0,
+                    width, height,
+                    gl.RGBA, gl.UNSIGNED_BYTE, this._silhouettePixels
+                );
+            } else if (right > left && top > bottom) {
+                const dirtyWidth = right - left;
+                const dirtyHeight = top - bottom;
+                const requiredLength = dirtyWidth * dirtyHeight * 4;
+                if (!this._partialSilhouettePixels || this._partialSilhouettePixels.length < requiredLength) {
+                    this._partialSilhouettePixels = new Uint8Array(requiredLength);
+                }
+                gl.readPixels(
+                    left, bottom,
+                    dirtyWidth, dirtyHeight,
+                    gl.RGBA, gl.UNSIGNED_BYTE, this._partialSilhouettePixels
+                );
+                for (let row = 0; row < dirtyHeight; row++) {
+                    this._silhouettePixels.set(
+                        this._partialSilhouettePixels.subarray(row * dirtyWidth * 4, (row + 1) * dirtyWidth * 4),
+                        (((bottom + row) * width) + left) * 4
+                    );
+                }
+            }
 
             this._silhouette.update(this._silhouetteImageData, true /* isPremultiplied */);
 

@@ -180,7 +180,13 @@ class Drawable {
      */
     set skin (newSkin) {
         if (this._skin !== newSkin) {
+            if (this._skin) {
+                this._skin.attachedDrawables.delete(this);
+            }
             this._skin = newSkin;
+            if (newSkin) {
+                newSkin.attachedDrawables.add(this);
+            }
             this._skinWasAltered();
         }
     }

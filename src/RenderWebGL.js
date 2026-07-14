@@ -21,6 +21,7 @@ const log = require('./util/log');
 
 const __isTouchingDrawablesPoint = twgl.v3.create();
 const __candidatesBounds = new Rectangle();
+const __touchingBounds = new Rectangle();
 const __candidateBounds = new Rectangle();
 const __fenceBounds = new Rectangle();
 const __touchingColor = new Uint8ClampedArray(4);
@@ -197,6 +198,8 @@ class RenderWebGL extends EventEmitter {
 
         /** @type {Array<int>} */
         this._drawList = [];
+
+        this._intersectionPool = [];
 
         // A list of layer group names in the order they should appear
         // from furthest back to furthest in front.
@@ -935,14 +938,8 @@ class RenderWebGL extends EventEmitter {
     }
 
     skinWasAltered(skin) {
-        // This is very hot function.
-        for (let i = 0; i < this._drawList.length; i++) {
-            const drawableId = this._drawList[i];
-            const drawable = this._allDrawables[drawableId];
-            // The draw list is sparse when real layer indexes are enabled.
-            if (drawable && drawable._skin === skin) {
-                drawable._skinWasAltered();
-            }
+        for (const drawable of skin.attachedDrawables) {
+            drawable._skinWasAltered();
         }
     }
 
@@ -1665,7 +1662,7 @@ class RenderWebGL extends EventEmitter {
         /** @todo remove this once URL-based skin setting is removed. */
         if (!drawable.skin || !drawable.skin.getTexture([100, 100])) return null;
 
-        const bounds = drawable.getFastBounds();
+        const bounds = drawable.getFastBounds(__touchingBounds);
 
         // Limit queries to the stage size.
         if (!this.offscreenTouching) {
@@ -1696,6 +1693,7 @@ class RenderWebGL extends EventEmitter {
         if (bounds === null) {
             return result;
         }
+        const pool = this._intersectionPool;
         // iterate through the drawables list BACKWARDS - we want the top most item to be the first we check
         for (let index = candidateIDs.length - 1; index >= 0; index--) {
             const id = candidateIDs[index];
@@ -1720,10 +1718,13 @@ class RenderWebGL extends EventEmitter {
                     if (bounds.intersects(candidateBounds)) {
                         // Update the CPU position data
                         drawable.updateCPURenderAttributes();
+                        if (result.length >= pool.length) {
+                            pool.push(new Rectangle());
+                        }
                         result.push({
                             id,
                             drawable,
-                            intersection: Rectangle.intersect(bounds, candidateBounds)
+                            intersection: Rectangle.intersect(bounds, candidateBounds, pool[result.length])
                         });
                     }
                 }
@@ -1989,12 +1990,9 @@ class RenderWebGL extends EventEmitter {
         bounds.top *= quality;
         bounds.bottom *= quality;
         bounds.snapToInt();
-        gl.viewport(
-            (this._nativeSize[0] * 0.5 * quality) + bounds.left,
-            (this._nativeSize[1] * 0.5 * quality) - bounds.top,
-            bounds.width,
-            bounds.height
-        );
+        const viewportX = (this._nativeSize[0] * 0.5 * quality) + bounds.left;
+        const viewportY = (this._nativeSize[1] * 0.5 * quality) - bounds.top;
+        gl.viewport(viewportX, viewportY, bounds.width, bounds.height);
         const projection = twgl.m4.ortho(
             // TW: We have to convert the snapped "screen-space" back to "stage-space" for rendering.
             bounds.left / quality,
@@ -2011,7 +2009,12 @@ class RenderWebGL extends EventEmitter {
             framebufferWidth: this._nativeSize[0] * quality,
             framebufferHeight: this._nativeSize[1] * quality
         });
-        skin._silhouetteDirty = true;
+        skin._markSilhouetteDirty(
+            viewportX,
+            viewportX + bounds.width,
+            viewportY,
+            viewportY + bounds.height
+        );
         this.dirty = true;
     }
 
@@ -2379,12 +2382,12 @@ class RenderWebGL extends EventEmitter {
 
         let blendAlpha = 1;
         for (let index = 0; blendAlpha !== 0 && index < drawables.length; index++) {
-            /*
-            if (left > vec[0] || right < vec[0] ||
-                bottom > vec[1] || top < vec[0]) {
+            const {intersection} = drawables[index];
+            if (intersection && (
+                intersection.left > vec[0] || intersection.right < vec[0] ||
+                intersection.bottom > vec[1] || intersection.top < vec[1])) {
                 continue;
             }
-            */
             Drawable.sampleColor4b(vec, drawables[index].drawable, __blendColor);
             // Equivalent to gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA)
             dst[0] += __blendColor[0] * blendAlpha;
