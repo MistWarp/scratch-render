@@ -473,6 +473,7 @@ class RenderWebGL extends EventEmitter {
      * @param {int} yTop The top edge's y-coordinate. Scratch 2 uses 180.
      */
     setStageSize(xLeft, xRight, yBottom, yTop) {
+        this.dirty = true;
         this._xLeft = xLeft;
         this._xRight = xRight;
         this._yBottom = yBottom;
