@@ -55,6 +55,8 @@ class SVGSkin extends Skin {
      * Dispose of this object. Do not use it after calling this method.
      */
     dispose () {
+        this._disposed = true;
+        this._svgImage.onload = null;
         this.resetMIPs();
         super.dispose();
     }
@@ -212,6 +214,7 @@ class SVGSkin extends Skin {
 
         // If there is another load already in progress, replace the old onload to effectively cancel the old load
         this._svgImage.onload = () => {
+            if (this._disposed) return;
             if (width === 0 || height === 0) {
                 super.setEmptyImageData();
                 return;
