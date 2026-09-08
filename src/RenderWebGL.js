@@ -1572,6 +1572,7 @@ class RenderWebGL extends EventEmitter {
                 height: canvasSpaceBounds.height * ratio
             };
         } finally {
+            for (const texture of bufferInfo.attachments) gl.deleteTexture(texture);
             gl.deleteFramebuffer(bufferInfo.framebuffer);
         }
     }

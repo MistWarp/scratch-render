@@ -177,6 +177,8 @@ class PenSkin extends Skin {
         this._renderer.removeListener(RenderConstants.Events.NativeSizeChanged, this.onNativeSizeChanged);
         this._renderer.gl.deleteTexture(this._texture);
         this._texture = null;
+        if (this._framebuffer) this._renderer.gl.deleteFramebuffer(this._framebuffer.framebuffer);
+        this._framebuffer = null;
         super.dispose();
     }
 
@@ -627,6 +629,7 @@ class PenSkin extends Skin {
         ];
 
         if (this._framebuffer) {
+            gl.deleteFramebuffer(this._framebuffer.framebuffer);
             // tw: resize framebuffer info doesn't work here, so always make a new framebuffer
             // twgl.resizeFramebufferInfo(gl, this._framebuffer, attachments, width, height);
             this._framebuffer = twgl.createFramebufferInfo(gl, attachments, width, height);
@@ -640,6 +643,7 @@ class PenSkin extends Skin {
         // tw: preserve old texture when resizing
         if (oldTexture) {
             this._drawPenTexture(oldTexture);
+            gl.deleteTexture(oldTexture);
         }
 
         this._silhouetteImageData = new ImageData(width, height);
