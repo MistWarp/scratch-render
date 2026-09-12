@@ -1056,7 +1056,7 @@ class RenderWebGL extends EventEmitter {
      */
     getCurrentSkinSize(drawableID) {
         const drawable = this._allDrawables[drawableID];
-        return this.getSkinSize(drawable.skin.id);
+        return drawable && drawable.skin ? this.getSkinSize(drawable.skin.id) : [0, 0];
     }
 
     /**
@@ -1066,7 +1066,7 @@ class RenderWebGL extends EventEmitter {
      */
     getSkinSize(skinID) {
         const skin = this._allSkins[skinID];
-        return skin.size;
+        return skin ? skin.size : [0, 0];
     }
 
     /**

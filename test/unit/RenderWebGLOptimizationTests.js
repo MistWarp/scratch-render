@@ -27,3 +27,16 @@ test('texture filtering only updates when it changes', t => {
     t.same(calls.map(call => call[2]), [4, 4, 5, 5]);
     t.end();
 });
+
+test('skin sizes tolerate asynchronous loading and destroyed skins', t => {
+    const renderer = Object.create(RenderWebGL.prototype);
+    renderer._allDrawables = [{skin: {id: 0}}, {}];
+    renderer._allSkins = [{size: [40, 60]}];
+    t.same(renderer.getCurrentSkinSize(0), [40, 60]);
+    delete renderer._allSkins[0];
+    t.same(renderer.getCurrentSkinSize(0), [0, 0]);
+    t.same(renderer.getCurrentSkinSize(1), [0, 0]);
+    t.same(renderer.getCurrentSkinSize(2), [0, 0]);
+    t.same(renderer.getSkinSize(123), [0, 0]);
+    t.end();
+});
