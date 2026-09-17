@@ -676,7 +676,9 @@ class RenderWebGL extends EventEmitter {
                 drawable.skin = newSkin;
             }
         }
-        oldSkin.dispose();
+        if (oldSkin) {
+            oldSkin.dispose();
+        }
     }
 
     /**
@@ -704,7 +706,9 @@ class RenderWebGL extends EventEmitter {
      */
     destroySkin(skinId) {
         const oldSkin = this._allSkins[skinId];
-        oldSkin.dispose();
+        if (oldSkin) {
+            oldSkin.dispose();
+        }
         delete this._allSkins[skinId];
     }
 
@@ -1076,7 +1080,7 @@ class RenderWebGL extends EventEmitter {
      */
     getSkinRotationCenter(skinID) {
         const skin = this._allSkins[skinID];
-        return skin.calculateRotationCenter();
+        return skin ? skin.calculateRotationCenter() : [0, 0];
     }
 
     /**
@@ -2239,6 +2243,9 @@ class RenderWebGL extends EventEmitter {
      */
     _getConvexHullPointsForDrawable(drawableID) {
         const drawable = this._allDrawables[drawableID];
+        if (!drawable || !drawable.skin) {
+            return [];
+        }
 
         const [width, height] = drawable.skin.size;
         // No points in the hull if invisible or size is 0.
