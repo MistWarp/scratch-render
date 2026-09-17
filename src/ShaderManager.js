@@ -81,7 +81,8 @@ class ShaderManager {
 
         const program = twgl.createProgramInfo(this._gl, [vsFullText, fsFullText], null, null, onError);
         if (!program) {
-            throw new Error(`Failed to compile shader (mode ${drawMode}, effects ${effectBits}): ${errorMessage}`);
+            const reason = errorMessage || (this._gl.isContextLost() ? 'WebGL context lost' : 'unknown error');
+            throw new Error(`Failed to compile shader (mode ${drawMode}, effects ${effectBits}): ${reason}`);
         }
         return program;
     }
