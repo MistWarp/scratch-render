@@ -83,6 +83,20 @@ class PenSkin extends Skin {
         // tw: keep track of native size
         this._nativeSize = renderer.getNativeSize();
 
+        this._createGLResources(gl);
+
+        this.onNativeSizeChanged = this.onNativeSizeChanged.bind(this);
+        this._renderer.on(RenderConstants.Events.NativeSizeChanged, this.onNativeSizeChanged);
+
+        this._setCanvasSize(renderer.getNativeSize());
+    }
+
+    /**
+     * Create the shaders and buffers pen drawing needs. Called again after a WebGL context loss.
+     * @param {WebGLRenderingContext} gl The renderer's context.
+     * @private
+     */
+    _createGLResources (gl) {
         const NO_EFFECTS = 0;
         /** @type {twgl.ProgramInfo} */
         this._lineShader = this._renderer._shaderManager.getShader(ShaderManager.DRAW_MODE.line, NO_EFFECTS);
@@ -163,11 +177,19 @@ class PenSkin extends Skin {
             gl.bindBuffer(gl.ARRAY_BUFFER, this.a_position_glbuffer);
             gl.bufferData(gl.ARRAY_BUFFER, positionBuffer, gl.STATIC_DRAW);
         }
+    }
 
-        this.onNativeSizeChanged = this.onNativeSizeChanged.bind(this);
-        this._renderer.on(RenderConstants.Events.NativeSizeChanged, this.onNativeSizeChanged);
-
-        this._setCanvasSize(renderer.getNativeSize());
+    /**
+     * Rebuild the pen layer after the WebGL context comes back. What was drawn on it is gone.
+     */
+    onContextRestored () {
+        const size = this._size;
+        this._texture = null;
+        this._framebuffer = null;
+        this._size = null;
+        this._createGLResources(this._renderer.gl);
+        this._setCanvasSize(size || this._renderer.getNativeSize());
+        super.onContextRestored();
     }
 
     /**
