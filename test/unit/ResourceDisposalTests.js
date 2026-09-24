@@ -1,7 +1,11 @@
 const test = require('tap').test;
 global.window = {};
 global.document = {createElement: () => ({getContext: () => ({})})};
-global.ImageData = class { constructor (width, height) { this.data = new Uint8ClampedArray(width * height * 4); } };
+global.ImageData = class {
+    constructor (width, height) {
+        this.data = new Uint8ClampedArray(width * height * 4);
+    }
+};
 const twgl = require('twgl.js');
 const PenSkin = require('../../src/PenSkin');
 const SVGSkin = require('../../src/SVGSkin');
@@ -16,12 +20,16 @@ test('pen resize preserves pixels before releasing old GPU resources', t => {
     twgl.createTexture = () => nextTexture;
     twgl.createFramebufferInfo = () => ({framebuffer: {}, attachments: [nextTexture]});
     const skin = Object.create(PenSkin.prototype);
-    Object.assign(skin, {_texture: oldTexture, _framebuffer: {framebuffer: oldFramebuffer},
-        _nativeSize: [2, 2], _rotationCenter: [0, 0], _markSilhouetteDirty () {},
+    Object.assign(skin, {_texture: oldTexture,
+        _framebuffer: {framebuffer: oldFramebuffer},
+        _nativeSize: [2, 2],
+        _rotationCenter: [0, 0],
+        _markSilhouetteDirty () {},
         _drawPenTexture: texture => calls.push(['copy', texture]),
         _renderer: {gl: {deleteTexture: texture => calls.push(['texture', texture]),
             deleteFramebuffer: framebuffer => calls.push(['framebuffer', framebuffer]),
-            clearColor () {}, clear () {}}}});
+            clearColor () {},
+            clear () {}}}});
     try {
         skin._setCanvasSize([4, 4]);
         t.same(calls, [['framebuffer', oldFramebuffer], ['copy', oldTexture], ['texture', oldTexture]]);

@@ -183,6 +183,16 @@ class Skin {
     }
 
     /**
+     * Forget GL textures that died with a lost WebGL context. Subclasses that keep their source
+     * data override this to rebuild lazily; the base skin only drops the shared empty texture.
+     */
+    onContextRestored () {
+        this._texture = null;
+        this._emptyImageData = null;
+        this._emptyImageTexture = null;
+    }
+
+    /**
      * Set the contents of this skin to an empty skin.
      * @fires Skin.event:WasAltered
      */

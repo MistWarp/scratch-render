@@ -183,6 +183,19 @@ class RenderWebGL extends EventEmitter {
 
         /** @type {WebGLRenderingContext} */
         const gl = this._gl = RenderWebGL._getContext(canvas);
+
+        /**
+         * True while the browser has taken the WebGL context away. Drawing is skipped until it is
+         * restored so a lost context does not surface as a cascade of shader compile errors.
+         * @type {boolean}
+         */
+        this._contextLost = false;
+        this._onContextLost = this._onContextLost.bind(this);
+        this._onContextRestored = this._onContextRestored.bind(this);
+        if (canvas && typeof canvas.addEventListener === 'function') {
+            canvas.addEventListener('webglcontextlost', this._onContextLost, false);
+            canvas.addEventListener('webglcontextrestored', this._onContextRestored, false);
+        }
         if (!gl) {
             throw new Error('Could not get WebGL context: this browser or environment may not support WebGL.');
         }
@@ -951,8 +964,54 @@ class RenderWebGL extends EventEmitter {
     /**
      * Draw all current drawables and present the frame on the canvas.
      */
+    /**
+     * @returns {boolean} True while the WebGL context is lost and nothing can be drawn.
+     */
+    get isContextLost () {
+        return this._contextLost;
+    }
+
+    /**
+     * Handle the browser taking the WebGL context away.
+     * Calling preventDefault is what allows the browser to restore it later.
+     * @param {Event} event The webglcontextlost event.
+     * @fires RenderWebGL#event:ContextLost
+     * @private
+     */
+    _onContextLost (event) {
+        if (event && typeof event.preventDefault === 'function') {
+            event.preventDefault();
+        }
+        this._contextLost = true;
+        this.emit('ContextLost');
+    }
+
+    /**
+     * Rebuild the GL resources this renderer owns after the context comes back.
+     * Skins drop the textures that died with the old context; the ones that keep their source
+     * (SVG, text) rebuild on the next draw, the others are empty until they are set again.
+     * @fires RenderWebGL#event:ContextRestored
+     * @private
+     */
+    _onContextRestored () {
+        const gl = this._gl;
+        this._contextLost = false;
+        this._shaderManager = new ShaderManager(gl);
+        this._textureFilterModes = new WeakMap();
+        this._regionId = null;
+        this._exitRegion = null;
+        this._createGeometry();
+        for (const skin of this._allSkins) {
+            if (skin && typeof skin.onContextRestored === 'function') {
+                skin.onContextRestored();
+            }
+        }
+        this.dirty = true;
+        this.emit('ContextRestored');
+    }
+
     draw() {
-        if (!this.dirty) {
+        if (!this.dirty || this._contextLost) {
             return;
         }
         this.dirty = false;
@@ -1416,6 +1475,10 @@ class RenderWebGL extends EventEmitter {
 
         candidateIDs = (candidateIDs || this._drawList).filter(id => {
             const drawable = this._allDrawables[id];
+            // The draw list may be sparse (real layer indexes) or hold ids that were destroyed.
+            if (!drawable) {
+                return false;
+            }
             if (!candidateIDs && !drawable.interactive) {
                 return false;
             }
