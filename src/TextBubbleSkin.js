@@ -88,6 +88,15 @@ class TextBubbleSkin extends Skin {
     }
 
     /**
+     * The bubble is re-rendered from its text on the next draw.
+     */
+    onContextRestored () {
+        this._texture = null;
+        this._textureDirty = true;
+        super.onContextRestored();
+    }
+
+    /**
      * @return {Array<number>} the dimensions, in Scratch units, of this skin.
      */
     get size () {
