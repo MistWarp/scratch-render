@@ -31,6 +31,14 @@ class BitmapSkin extends Skin {
     }
 
     /**
+     * The bitmap itself is not kept, so after a context loss this skin is empty until it is set again.
+     */
+    onContextRestored () {
+        this._texture = null;
+        super.onContextRestored();
+    }
+
+    /**
      * @return {Array<number>} the "native" size, in texels, of this skin.
      */
     get size () {

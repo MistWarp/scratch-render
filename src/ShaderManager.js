@@ -82,7 +82,13 @@ class ShaderManager {
         const program = twgl.createProgramInfo(this._gl, [vsFullText, fsFullText], null, null, onError);
         if (!program) {
             const reason = errorMessage || (this._gl.isContextLost() ? 'WebGL context lost' : 'unknown error');
-            throw new Error(`Failed to compile shader (mode ${drawMode}, effects ${effectBits}): ${reason}`);
+            // A syntax error on line 1 means the bundler handed us something other than the shader
+            // source, so include the start of what was actually compiled.
+            const preview = `vertex starts "${vsFullText.slice(0, 80)}", ` +
+                `fragment starts "${fsFullText.slice(0, 80)}"`;
+            throw new Error(
+                `Failed to compile shader (mode ${drawMode}, effects ${effectBits}): ${reason} (${preview})`
+            );
         }
         return program;
     }

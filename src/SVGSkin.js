@@ -183,6 +183,15 @@ class SVGSkin extends Skin {
     }
 
     /**
+     * The SVG image is still loaded, so the MIPs are rebuilt on the next draw.
+     */
+    onContextRestored () {
+        this._scaledMIPs.length = 0;
+        this._largestMIPScale = 0;
+        super.onContextRestored();
+    }
+
+    /**
      * Do a hard reset of the existing MIPs by deleting them.
      */
     resetMIPs () {
