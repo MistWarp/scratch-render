@@ -40,3 +40,11 @@ test('skin sizes tolerate asynchronous loading and destroyed skins', t => {
     t.same(renderer.getSkinSize(123), [0, 0]);
     t.end();
 });
+
+test('fencing keeps the requested position while a drawable has no skin', t => {
+    const renderer = Object.create(RenderWebGL.prototype);
+    renderer._allDrawables = [{_position: [0, 0], _skin: null}];
+    t.same(renderer.getFencedPositionOfDrawable(0, [500, -400]), [500, -400]);
+    t.same(renderer.getFencedPositionOfDrawable(7, [12, 34]), [12, 34]);
+    t.end();
+});
