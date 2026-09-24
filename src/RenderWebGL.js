@@ -1880,9 +1880,16 @@ class RenderWebGL extends EventEmitter {
             return [x, y];
         }
 
+        const skin = drawable._skin;
+        if (!skin) {
+            // A target can move while its skin is still loading or after it was destroyed.
+            // There is nothing to fence against, so keep the requested position.
+            return [x, y];
+        }
+
         const dx = x - drawable._position[0];
         const dy = y - drawable._position[1];
-        const aabb = drawable._skin.getFenceBounds(drawable, __fenceBounds);
+        const aabb = skin.getFenceBounds(drawable, __fenceBounds);
         const inset = Math.floor(Math.min(aabb.width, aabb.height) / 2);
 
         const sx = this._xRight - Math.min(FENCE_WIDTH, inset);
