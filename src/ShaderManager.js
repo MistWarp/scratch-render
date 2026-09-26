@@ -203,7 +203,12 @@ ShaderManager.DRAW_MODE = {
     /**
      * Draw the background in a certain color. Must sometimes be used instead of gl.clear.
      */
-    background: 'background'
+    background: 'background',
+
+    /**
+     * Draw batched pen triangles with a color per vertex.
+     */
+    triangle: 'triangle'
 };
 
 module.exports = ShaderManager;
