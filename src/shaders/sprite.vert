@@ -16,7 +16,12 @@ varying vec4 v_penPoints;
 const float epsilon = 1e-3;
 #endif
 
-#if !(defined(DRAW_MODE_line) || defined(DRAW_MODE_background))
+#ifdef DRAW_MODE_triangle
+attribute vec4 a_triangleColor;
+varying vec4 v_triangleColor;
+#endif
+
+#if !(defined(DRAW_MODE_line) || defined(DRAW_MODE_background) || defined(DRAW_MODE_triangle))
 uniform mat4 u_projectionMatrix;
 uniform mat4 u_modelMatrix;
 attribute vec2 a_texCoord;
@@ -75,6 +80,9 @@ void main() {
 	v_penPoints = a_penPoints;
 	#elif defined(DRAW_MODE_background)
 	gl_Position = vec4(a_position * 2.0, 0, 1);
+	#elif defined(DRAW_MODE_triangle)
+	gl_Position = vec4(a_position * 2.0, 0, 1);
+	v_triangleColor = a_triangleColor;
 	#else
 	gl_Position = u_projectionMatrix * u_modelMatrix * vec4(a_position, 0, 1);
 	v_texCoord = a_texCoord;

@@ -28,6 +28,11 @@ const PEN_ATTRIBUTE_BUFFER_SIZE = 163800;
 const PEN_ATTRIBUTE_STRIDE = 10;
 const PEN_ATTRIBUTE_STRIDE_BYTES = PEN_ATTRIBUTE_STRIDE * 4;
 
+const TRIANGLE_VERTEX_STRIDE = 6;
+const TRIANGLE_VERTEX_STRIDE_BYTES = TRIANGLE_VERTEX_STRIDE * 4;
+const TRIANGLE_STRIDE = TRIANGLE_VERTEX_STRIDE * 3;
+const TRIANGLE_BUFFER_SIZE = TRIANGLE_STRIDE * 8192;
+
 class PenSkin extends Skin {
     /**
      * Create a Skin which implements a Scratch pen layer.
@@ -69,6 +74,12 @@ class PenSkin extends Skin {
         };
 
         /** @type {object} */
+        this._triangleOnBufferDrawRegionId = {
+            enter: () => this._enterDrawTriangleOnBuffer(),
+            exit: () => this._exitDrawTriangleOnBuffer()
+        };
+
+        /** @type {object} */
         this._usePenBufferDrawRegionId = {
             enter: () => this._enterUsePenBuffer(),
             exit: () => this._exitUsePenBuffer()
@@ -102,10 +113,14 @@ class PenSkin extends Skin {
         this._lineShader = this._renderer._shaderManager.getShader(ShaderManager.DRAW_MODE.line, NO_EFFECTS);
 
         /** @type {twgl.ProgramInfo} */
-        this._triangleShader = this._renderer._shaderManager.getShader(ShaderManager.DRAW_MODE.background, NO_EFFECTS);
+        this._triangleShader = this._renderer._shaderManager.getShader(ShaderManager.DRAW_MODE.triangle, NO_EFFECTS);
         this._triangle_glbuffer = gl.createBuffer();
-        this._triangle_loc = gl.getAttribLocation(this._triangleShader.program, 'a_position');
-        this._triangle_vertices = new Float32Array(6);
+        this._triangle_position_loc = gl.getAttribLocation(this._triangleShader.program, 'a_position');
+        this._triangle_color_loc = gl.getAttribLocation(this._triangleShader.program, 'a_triangleColor');
+        this._triangle_data = new Float32Array(TRIANGLE_BUFFER_SIZE);
+        this._triangle_index = 0;
+        gl.bindBuffer(gl.ARRAY_BUFFER, this._triangle_glbuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, this._triangle_data.length * 4, gl.STREAM_DRAW);
 
         // Draw region used to preserve texture when resizing
         this._drawTextureShader = this._renderer._shaderManager.getShader(ShaderManager.DRAW_MODE.default, NO_EFFECTS);
@@ -493,50 +508,42 @@ class PenSkin extends Skin {
      * @param {number} y3 - the Y coordinate of the third vertex.
      */
     _drawTriangleOnBuffer (penAttributes, x1, y1, x2, y2, x3, y3) {
-        this._renderer.enterDrawRegion(this._usePenBufferDrawRegionId);
+        this._renderer.enterDrawRegion(this._triangleOnBufferDrawRegionId);
 
-        const gl = this._renderer.gl;
+        if (this._triangle_index + TRIANGLE_STRIDE > TRIANGLE_BUFFER_SIZE) {
+            this._flushTriangles();
+        }
+
         const width = this._size[0];
         const height = this._size[1];
-
-        gl.viewport(0, 0, width, height);
-
-        const shader = this._triangleShader;
-        gl.useProgram(shader.program);
-
-        gl.enable(gl.BLEND);
-        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-
         const c = penAttributes.color4f || DefaultPenAttributes.color4f;
-        const color = [
-            c[0] * c[3],
-            c[1] * c[3],
-            c[2] * c[3],
-            c[3]
-        ];
+        const alpha = c[3];
+        const r = c[0] * alpha;
+        const g = c[1] * alpha;
+        const b = c[2] * alpha;
 
-        twgl.setUniforms(shader, {
-            u_backgroundColor: color
-        });
+        const data = this._triangle_data;
+        let i = this._triangle_index;
+        data[i++] = x1 / width;
+        data[i++] = -y1 / height;
+        data[i++] = r;
+        data[i++] = g;
+        data[i++] = b;
+        data[i++] = alpha;
+        data[i++] = x2 / width;
+        data[i++] = -y2 / height;
+        data[i++] = r;
+        data[i++] = g;
+        data[i++] = b;
+        data[i++] = alpha;
+        data[i++] = x3 / width;
+        data[i++] = -y3 / height;
+        data[i++] = r;
+        data[i++] = g;
+        data[i++] = b;
+        data[i++] = alpha;
+        this._triangle_index = i;
 
-        const vertices = this._triangle_vertices;
-        vertices[0] = x1 / width;
-        vertices[1] = -y1 / height;
-        vertices[2] = x2 / width;
-        vertices[3] = -y2 / height;
-        vertices[4] = x3 / width;
-        vertices[5] = -y3 / height;
-
-        const loc = this._triangle_loc;
-        gl.bindBuffer(gl.ARRAY_BUFFER, this._triangle_glbuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STREAM_DRAW);
-        gl.enableVertexAttribArray(loc);
-        gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-
-        gl.drawArrays(gl.TRIANGLES, 0, 3);
-
-        gl.disableVertexAttribArray(loc);
-        gl.bindBuffer(gl.ARRAY_BUFFER, null);
         this._markSilhouetteDirty(
             (width * 0.5) + Math.min(x1, x2, x3) - 2,
             (width * 0.5) + Math.max(x1, x2, x3) + 2,
@@ -545,6 +552,45 @@ class PenSkin extends Skin {
         );
     }
 
+    _enterDrawTriangleOnBuffer () {
+        const gl = this._renderer.gl;
+
+        twgl.bindFramebufferInfo(gl, this._framebuffer);
+        gl.viewport(0, 0, this._size[0], this._size[1]);
+        gl.useProgram(this._triangleShader.program);
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this._triangle_glbuffer);
+        gl.enableVertexAttribArray(this._triangle_position_loc);
+        gl.vertexAttribPointer(this._triangle_position_loc, 2, gl.FLOAT, false, TRIANGLE_VERTEX_STRIDE_BYTES, 0);
+        gl.enableVertexAttribArray(this._triangle_color_loc);
+        gl.vertexAttribPointer(this._triangle_color_loc, 4, gl.FLOAT, false, TRIANGLE_VERTEX_STRIDE_BYTES, 2 * 4);
+
+        this._triangle_index = 0;
+    }
+
+    _exitDrawTriangleOnBuffer () {
+        if (this._triangle_index) {
+            this._flushTriangles();
+        }
+
+        const gl = this._renderer.gl;
+        gl.disableVertexAttribArray(this._triangle_position_loc);
+        gl.disableVertexAttribArray(this._triangle_color_loc);
+        gl.bindBuffer(gl.ARRAY_BUFFER, null);
+        twgl.bindFramebufferInfo(gl, null);
+    }
+
+    _flushTriangles () {
+        const gl = this._renderer.gl;
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this._triangle_glbuffer);
+        gl.bufferSubData(gl.ARRAY_BUFFER, 0, this._triangle_data.subarray(0, this._triangle_index));
+        gl.drawArrays(gl.TRIANGLES, 0, this._triangle_index / TRIANGLE_VERTEX_STRIDE);
+
+        this._triangle_index = 0;
+    }
 
     _flushLines () {
         /** @type {WebGLRenderingContext} */
