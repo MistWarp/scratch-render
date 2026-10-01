@@ -43,10 +43,6 @@ varying float v_lineLength;
 uniform vec4 u_backgroundColor;
 #endif // DRAW_MODE_background
 
-#ifdef DRAW_MODE_triangle
-varying vec4 v_triangleColor;
-#endif // DRAW_MODE_triangle
-
 uniform sampler2D u_skin;
 
 #ifndef DRAW_MODE_background
@@ -119,7 +115,7 @@ const vec2 kCenter = vec2(0.5, 0.5);
 
 void main()
 {
-	#if !(defined(DRAW_MODE_line) || defined(DRAW_MODE_background) || defined(DRAW_MODE_triangle))
+	#if !(defined(DRAW_MODE_line) || defined(DRAW_MODE_background))
 	vec2 texcoord0 = v_texCoord;
 
 	#ifdef ENABLE_mosaic
@@ -225,7 +221,7 @@ void main()
 	gl_FragColor.rgb /= gl_FragColor.a + epsilon;
 	#endif
 
-	#endif // !(defined(DRAW_MODE_line) || defined(DRAW_MODE_background) || defined(DRAW_MODE_triangle))
+	#endif // !(defined(DRAW_MODE_line) || defined(DRAW_MODE_background))
 
 	#ifdef DRAW_MODE_line
 	// Maaaaagic antialiased-line-with-round-caps shader.
@@ -246,10 +242,6 @@ void main()
 	// the closer we are to the line, invert it.
 	gl_FragColor = v_lineColor * clamp(1.0 - line, 0.0, 1.0);
 	#endif // DRAW_MODE_line
-
-	#ifdef DRAW_MODE_triangle
-	gl_FragColor = v_triangleColor;
-	#endif // DRAW_MODE_triangle
 
 	#ifdef DRAW_MODE_background
 	gl_FragColor = u_backgroundColor;

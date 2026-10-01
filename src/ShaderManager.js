@@ -20,6 +20,13 @@ class ShaderManager {
                 this._shaderCache[modeName] = [];
             }
         }
+
+        /**
+         * The pen triangle shader, built on first use.
+         * @type {?ProgramInfo}
+         * @private
+         */
+        this._triangleShader = null;
     }
 
     /**
@@ -68,6 +75,37 @@ class ShaderManager {
         const fsFullText = definesText + require('raw-loader!./shaders/sprite.frag');
         /* eslint-enable global-require */
 
+        return this._compileProgram(vsFullText, fsFullText, `mode ${drawMode}, effects ${effectBits}`);
+    }
+
+    /**
+     * Fetch the shader that draws batched pen triangles with a color per vertex.
+     * It is built from its own source and kept out of the sprite shader cache because extensions
+     * rewrite the sprite shader text inside _buildShader and delete every cached sprite program.
+     * @returns {ProgramInfo} The shader's program info.
+     */
+    getTriangleShader () {
+        if (!this._triangleShader) {
+            /* eslint-disable global-require */
+            this._triangleShader = this._compileProgram(
+                require('raw-loader!./shaders/triangle.vert'),
+                require('raw-loader!./shaders/triangle.frag'),
+                'pen triangles'
+            );
+            /* eslint-enable global-require */
+        }
+        return this._triangleShader;
+    }
+
+    /**
+     * Compile and link a vertex and fragment shader.
+     * @param {string} vsFullText The vertex shader source.
+     * @param {string} fsFullText The fragment shader source.
+     * @param {string} description What the shader is for, used in the error message.
+     * @returns {ProgramInfo} The new shader's program info.
+     * @private
+     */
+    _compileProgram (vsFullText, fsFullText, description) {
         let errorMessage = null;
         const onError = newError => {
             // twgl won't log the error when we provide a custom error callback, so log it ourselves
@@ -87,7 +125,7 @@ class ShaderManager {
             const preview = `vertex starts "${vsFullText.slice(0, 80)}", ` +
                 `fragment starts "${fsFullText.slice(0, 80)}"`;
             throw new Error(
-                `Failed to compile shader (mode ${drawMode}, effects ${effectBits}): ${reason} (${preview})`
+                `Failed to compile shader (${description}): ${reason} (${preview})`
             );
         }
         return program;
@@ -203,12 +241,7 @@ ShaderManager.DRAW_MODE = {
     /**
      * Draw the background in a certain color. Must sometimes be used instead of gl.clear.
      */
-    background: 'background',
-
-    /**
-     * Draw batched pen triangles with a color per vertex.
-     */
-    triangle: 'triangle'
+    background: 'background'
 };
 
 module.exports = ShaderManager;
