@@ -113,7 +113,7 @@ class PenSkin extends Skin {
         this._lineShader = this._renderer._shaderManager.getShader(ShaderManager.DRAW_MODE.line, NO_EFFECTS);
 
         /** @type {twgl.ProgramInfo} */
-        this._triangleShader = this._renderer._shaderManager.getShader(ShaderManager.DRAW_MODE.triangle, NO_EFFECTS);
+        this._triangleShader = this._renderer._shaderManager.getTriangleShader();
         this._triangle_glbuffer = gl.createBuffer();
         this._triangle_position_loc = gl.getAttribLocation(this._triangleShader.program, 'a_position');
         this._triangle_color_loc = gl.getAttribLocation(this._triangleShader.program, 'a_triangleColor');
