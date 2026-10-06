@@ -968,7 +968,7 @@ class RenderWebGL extends EventEmitter {
      * @returns {boolean} True while the WebGL context is lost and nothing can be drawn.
      */
     get isContextLost () {
-        return this._contextLost;
+        return this._contextLost || this._gl.isContextLost();
     }
 
     /**
@@ -1011,7 +1011,7 @@ class RenderWebGL extends EventEmitter {
     }
 
     draw() {
-        if (!this.dirty || this._contextLost) {
+        if (!this.dirty || this.isContextLost) {
             return;
         }
         this.dirty = false;
