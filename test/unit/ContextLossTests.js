@@ -10,7 +10,9 @@ const fakeRenderer = () => {
     renderer._allDrawables = [];
     renderer._drawList = [];
     renderer._contextLost = false;
-    renderer._gl = {};
+    renderer._gl = {
+        isContextLost: () => false
+    };
     renderer.dirty = true;
     renderer._listeners = {};
     renderer.emit = name => {
@@ -30,6 +32,19 @@ test('losing the context stops drawing and asks the browser to restore it', t =>
     t.equal(prevented, 1);
     t.equal(renderer.isContextLost, true);
     t.equal(renderer._listeners.ContextLost, 1);
+
+    renderer._doExitDrawRegion = () => {
+        throw new Error('draw must not touch GL while the context is lost');
+    };
+    t.doesNotThrow(() => renderer.draw());
+    t.equal(renderer.dirty, true, 'the frame is still pending');
+    t.end();
+});
+
+test('a context the browser has lost is not drawn before the lost event arrives', t => {
+    const renderer = fakeRenderer();
+    renderer._gl.isContextLost = () => true;
+    t.equal(renderer.isContextLost, true);
 
     renderer._doExitDrawRegion = () => {
         throw new Error('draw must not touch GL while the context is lost');
