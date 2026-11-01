@@ -7,5 +7,8 @@ module.exports = {
     },
     globals: {
         Buffer: true // TODO: remove this?
+    },
+    rules: {
+        'require-jsdoc': 'off'
     }
 };
