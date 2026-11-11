@@ -12,6 +12,9 @@ const ShaderManager = require('./ShaderManager');
  */
 const INDEX_OFFSET = 8;
 
+let __smallerMIPCanvas = null;
+let __smallerMIPContext = null;
+
 class SVGSkin extends Skin {
     /**
      * Create a new SVG skin.
@@ -104,21 +107,23 @@ class SVGSkin extends Skin {
      */
     createMIP (scale) {
         const isLargestMIP = this._largestMIPScale < scale;
-        // TW: Silhouette will lazily read image data from our <canvas>. However, this canvas is shared
-        // between the Skin and Silhouette so changing it here can mess up Silhouette. To prevent that,
-        // we will force the silhouette to synchronously read the image data before we mutate the
-        // canvas, unless the new MIP is the largest MIP, in which case doing so is unnecessary as we
-        // will update the silhouette later anyways.
+        let canvas = this._canvas;
+        let context = this._context;
         if (!isLargestMIP) {
-            this._silhouette.unlazy();
+            if (__smallerMIPCanvas === null) {
+                __smallerMIPCanvas = document.createElement('canvas');
+                __smallerMIPContext = __smallerMIPCanvas.getContext('2d');
+            }
+            canvas = __smallerMIPCanvas;
+            context = __smallerMIPContext;
         }
 
         const [width, height] = this._size;
-        this._canvas.width = width * scale;
-        this._canvas.height = height * scale;
+        canvas.width = width * scale;
+        canvas.height = height * scale;
         if (
-            this._canvas.width <= 0 ||
-            this._canvas.height <= 0 ||
+            canvas.width <= 0 ||
+            canvas.height <= 0 ||
             // Even if the canvas at the current scale has a nonzero size, the image's dimensions are floored
             // pre-scaling; e.g. if an image has a width of 0.4 and is being rendered at 3x scale, the canvas will have
             // a width of 1, but the image's width will be rounded down to 0 on some browsers (Firefox) prior to being
@@ -126,13 +131,13 @@ class SVGSkin extends Skin {
             this._svgImage.naturalWidth <= 0 ||
             this._svgImage.naturalHeight <= 0
         ) return super.getTexture();
-        this._context.clearRect(0, 0, this._canvas.width, this._canvas.height);
-        this._context.setTransform(scale, 0, 0, scale, 0, 0);
-        this._context.drawImage(this._svgImage, 0, 0);
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        context.setTransform(scale, 0, 0, scale, 0, 0);
+        context.drawImage(this._svgImage, 0, 0);
 
         // TW: Reading image data from <canvas> is very slow and causes animations to stutter,
         // so we just use the canvas directly instead.
-        const textureData = this._canvas;
+        const textureData = canvas;
 
         const textureOptions = {
             auto: false,
@@ -147,6 +152,9 @@ class SVGSkin extends Skin {
         if (isLargestMIP) {
             this._silhouette.update(textureData);
             this._largestMIPScale = scale;
+        } else {
+            canvas.width = 1;
+            canvas.height = 1;
         }
 
         return mip;
