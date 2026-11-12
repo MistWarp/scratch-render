@@ -22,11 +22,11 @@ const log = require('./util/log');
 const __isTouchingDrawablesPoint = twgl.v3.create();
 const __candidatesBounds = new Rectangle();
 const __touchingBounds = new Rectangle();
-const __candidateBounds = new Rectangle();
 const __fenceBounds = new Rectangle();
 const __touchingColor = new Uint8ClampedArray(4);
 const __blendColor = new Uint8ClampedArray(4);
 const __drawableScale = [0, 0];
+const __nativeScale = [100, 100];
 const __projectionUniforms = {u_projectionMatrix: null};
 
 // More pixels than this and we give up to the GPU and take the cost of readPixels
@@ -212,7 +212,8 @@ class RenderWebGL extends EventEmitter {
         /** @type {Array<int>} */
         this._drawList = [];
 
-        this._intersectionPool = [];
+        this._candidatePool = [];
+        this._candidatePoolUsed = 0;
 
         // A list of layer group names in the order they should appear
         // from furthest back to furthest in front.
@@ -723,6 +724,7 @@ class RenderWebGL extends EventEmitter {
             oldSkin.dispose();
         }
         delete this._allSkins[skinId];
+        this._releaseCandidatePool();
     }
 
     /**
@@ -839,6 +841,7 @@ class RenderWebGL extends EventEmitter {
         const drawable = this._allDrawables[drawableID];
         drawable.dispose();
         delete this._allDrawables[drawableID];
+        this._releaseCandidatePool();
 
         const currentLayerGroup = this._layerGroups[group];
         const endIndex = this._endIndexForKnownLayerGroup(currentLayerGroup);
@@ -1189,25 +1192,48 @@ class RenderWebGL extends EventEmitter {
 
         drawable.updateCPURenderAttributes();
 
+        for (let index = 0; index < candidates.length; index++) {
+            const candidate = candidates[index];
+            candidate.colorSilhouette = candidate.drawable.getPlainColorSilhouette();
+        }
+        const plainSilhouette = hasMask ? null : drawable.getPlainTouchingSilhouette();
+        const plainData = plainSilhouette === null ? null : plainSilhouette._colorData;
+        const plainMatrix = drawable._inverseMatrix;
+        const plainWidth = plainData ? plainSilhouette._width : 0;
+        const plainHeight = plainData ? plainSilhouette._height : 0;
+        const plainLinear = drawable.isTouching === drawable._isTouchingLinear;
+
         // Masked drawable ignores ghost effect
         const effectMask = ~ShaderManager.EFFECT_INFO.ghost.mask;
 
+        const left = bounds.left;
+        const right = bounds.right;
+        const bottom = bounds.bottom;
+        const top = bounds.top;
+        const pixelsPerRow = bounds.width * (candidates.length + 1);
+
         // Scratch Space - +y is top
-        for (let y = bounds.bottom; y <= bounds.top; y++) {
-            if (bounds.width * (y - bounds.bottom) * (candidates.length + 1) >= maxPixelsForCPU) {
-                return this._isTouchingColorGpuFin(bounds, color3b, y - bounds.bottom);
+        for (let y = bottom; y <= top; y++) {
+            if (pixelsPerRow * (y - bottom) >= maxPixelsForCPU) {
+                return this._isTouchingColorGpuFin(bounds, color3b, y - bottom);
             }
-            for (let x = bounds.left; x <= bounds.right; x++) {
+            for (let x = left; x <= right; x++) {
                 point[1] = y;
                 point[0] = x;
-                // if we use a mask, check our sample color...
-                if (hasMask ?
-                    maskMatches(Drawable.sampleColor4b(point, drawable, color, effectMask), mask3b) :
-                    drawable.isTouching(point)) {
-                    this.sampleColor4b(point, candidates, color);
+                let touching;
+                if (plainData) {
+                    touching = Drawable.isTouchingPlain(
+                        plainMatrix, plainData, plainWidth, plainHeight, plainLinear, point[0], point[1]);
+                } else if (hasMask) {
+                    touching = maskMatches(Drawable.sampleColor4b(point, drawable, color, effectMask), mask3b);
+                } else {
+                    touching = drawable.isTouching(point);
+                }
+                if (touching) {
+                    this._sampleCandidatesColor4b(point, candidates, color);
                     if (debugCanvasContext) {
                         debugCanvasContext.fillStyle = `rgb(${color[0]},${color[1]},${color[2]})`;
-                        debugCanvasContext.fillRect(x - bounds.left, bounds.bottom - y, 1, 1);
+                        debugCanvasContext.fillRect(x - left, bottom - y, 1, 1);
                     }
                     // ...and the target color is drawn at this pixel
                     if (colorMatches(color, color3b, 0)) {
@@ -1362,17 +1388,9 @@ class RenderWebGL extends EventEmitter {
         // This is an EXTREMELY brute force collision detector, but it is
         // still faster than asking the GPU to give us the pixels.
         for (let index = 0; index < candidates.length; index++) {
-            const candidate = candidates[index].drawable;
-            const intersection = candidates[index].intersection;
-            for (let x = intersection.left; x <= intersection.right; x++) {
-                // Scratch Space - +y is top
-                point[0] = x;
-                for (let y = intersection.bottom; y <= intersection.top; y++) {
-                    point[1] = y;
-                    if (drawable.isTouching(point) && candidate.isTouching(point)) {
-                        return true;
-                    }
-                }
+            const candidate = candidates[index];
+            if (Drawable.isTouchingPair(drawable, candidate.drawable, candidate.intersection, point)) {
+                return true;
             }
         }
 
@@ -1729,7 +1747,7 @@ class RenderWebGL extends EventEmitter {
         const drawable = this._allDrawables[drawableID];
 
         /** @todo remove this once URL-based skin setting is removed. */
-        if (!drawable.skin || !drawable.skin.getTexture([100, 100])) return null;
+        if (!drawable.skin || !drawable.skin.getTexture(__nativeScale)) return null;
 
         const bounds = drawable.getFastBounds(__touchingBounds);
 
@@ -1762,44 +1780,65 @@ class RenderWebGL extends EventEmitter {
         if (bounds === null) {
             return result;
         }
-        const pool = this._intersectionPool;
+        const pool = this._candidatePool;
+        const allDrawables = this._allDrawables;
+        const allowPrivateSkinAccess = this.allowPrivateSkinAccess;
+        const left = bounds.left;
+        const right = bounds.right;
+        const bottom = bounds.bottom;
+        const top = bounds.top;
         // iterate through the drawables list BACKWARDS - we want the top most item to be the first we check
         for (let index = candidateIDs.length - 1; index >= 0; index--) {
             const id = candidateIDs[index];
             if (id !== drawableID) {
-                const drawable = this._allDrawables[id];
+                const drawable = allDrawables[id];
                 if (!drawable) continue;
-                // Text bubbles aren't considered in "touching" queries
-                if (drawable.skin instanceof TextBubbleSkin) continue;
-                if (drawable.skin && drawable._visible) {
+                const skin = drawable._skin;
+                if (!skin || !drawable._visible) continue;
+
+                // Push bounds out to integers. If a drawable extends out into half a pixel, that half-pixel still
+                // needs to be tested. Plus, in some areas we construct another rectangle from the union of these,
+                // and iterate over its pixels (width * height). Turns out that doesn't work so well when the
+                // width/height aren't integers.
+                const candidateBounds = drawable._snappedFastBoundsDirty ?
+                    drawable.getSnappedFastBounds() : drawable._snappedFastBounds;
+
+                if (left <= candidateBounds.right &&
+                    candidateBounds.left <= right &&
+                    top >= candidateBounds.bottom &&
+                    candidateBounds.top >= bottom) {
+                    // Text bubbles aren't considered in "touching" queries
+                    if (skin instanceof TextBubbleSkin) continue;
                     // If private skin access is disabled, do not allow projects to use touching blocks to guess the
                     // contents of a private skin.
-                    if (!this.allowPrivateSkinAccess && drawable.skin.private) continue;
-
-                    const candidateBounds = drawable.getFastBounds(__candidateBounds);
-
-                    // Push bounds out to integers. If a drawable extends out into half a pixel, that half-pixel still
-                    // needs to be tested. Plus, in some areas we construct another rectangle from the union of these,
-                    // and iterate over its pixels (width * height). Turns out that doesn't work so well when the
-                    // width/height aren't integers.
-                    candidateBounds.snapToInt();
-
-                    if (bounds.intersects(candidateBounds)) {
-                        // Update the CPU position data
-                        drawable.updateCPURenderAttributes();
-                        if (result.length >= pool.length) {
-                            pool.push(new Rectangle());
-                        }
-                        result.push({
-                            id,
-                            drawable,
-                            intersection: Rectangle.intersect(bounds, candidateBounds, pool[result.length])
-                        });
+                    if (!allowPrivateSkinAccess && skin.private) continue;
+                    // Update the CPU position data
+                    drawable.updateCPURenderAttributes();
+                    if (result.length >= pool.length) {
+                        pool.push({id: 0, drawable: null, intersection: new Rectangle(), colorSilhouette: null});
                     }
+                    const candidate = pool[result.length];
+                    candidate.id = id;
+                    candidate.drawable = drawable;
+                    candidate.colorSilhouette = null;
+                    Rectangle.intersect(bounds, candidateBounds, candidate.intersection);
+                    result.push(candidate);
                 }
             }
         }
+        if (result.length > this._candidatePoolUsed) {
+            this._candidatePoolUsed = result.length;
+        }
         return result;
+    }
+
+    _releaseCandidatePool() {
+        const pool = this._candidatePool;
+        for (let index = 0; index < this._candidatePoolUsed; index++) {
+            pool[index].drawable = null;
+            pool[index].colorSilhouette = null;
+        }
+        this._candidatePoolUsed = 0;
     }
 
     /**
@@ -1809,13 +1848,13 @@ class RenderWebGL extends EventEmitter {
      * @return {Rectangle} the outer bounding box union
      */
     _candidatesBounds(candidates) {
-        return candidates.reduce((memo, { intersection }) => {
-            if (!memo) {
-                return intersection;
-            }
+        let bounds = null;
+        for (let index = 0; index < candidates.length; index++) {
+            const intersection = candidates[index].intersection;
             // store the union of the two rectangles in our static rectangle instance
-            return Rectangle.union(memo, intersection, __candidatesBounds);
-        }, null);
+            bounds = bounds ? Rectangle.union(bounds, intersection, __candidatesBounds) : intersection;
+        }
+        return bounds;
     }
 
     /**
@@ -2476,6 +2515,39 @@ class RenderWebGL extends EventEmitter {
         }
         // Backdrop could be transparent, so we need to go to the background color of the
         // draw scene as a fallback if drawables are transparent.
+        dst[0] += 255 * this._backgroundColor4f[0] * blendAlpha;
+        dst[1] += 255 * this._backgroundColor4f[1] * blendAlpha;
+        dst[2] += 255 * this._backgroundColor4f[2] * blendAlpha;
+        blendAlpha *= 1 - this._backgroundColor4f[3];
+        dst[3] = 255 * (1 - blendAlpha);
+        return dst;
+    }
+
+    _sampleCandidatesColor4b(vec, candidates, dst) {
+        const x = vec[0];
+        const y = vec[1];
+        dst[0] = 0;
+        dst[1] = 0;
+        dst[2] = 0;
+
+        let blendAlpha = 1;
+        for (let index = 0; blendAlpha !== 0 && index < candidates.length; index++) {
+            const candidate = candidates[index];
+            const intersection = candidate.intersection;
+            if (intersection.left > x || intersection.right < x ||
+                intersection.bottom > y || intersection.top < y) {
+                continue;
+            }
+            if (candidate.colorSilhouette === null) {
+                Drawable.sampleColor4b(vec, candidate.drawable, __blendColor);
+            } else {
+                Drawable.samplePlainColor4b(x, y, candidate.drawable, candidate.colorSilhouette, __blendColor);
+            }
+            dst[0] += __blendColor[0] * blendAlpha;
+            dst[1] += __blendColor[1] * blendAlpha;
+            dst[2] += __blendColor[2] * blendAlpha;
+            blendAlpha *= (1 - (__blendColor[3] / 255));
+        }
         dst[0] += 255 * this._backgroundColor4f[0] * blendAlpha;
         dst[1] += 255 * this._backgroundColor4f[1] * blendAlpha;
         dst[2] += 255 * this._backgroundColor4f[2] * blendAlpha;

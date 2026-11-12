@@ -4,6 +4,8 @@ const Rectangle = require('./Rectangle');
 const RenderConstants = require('./RenderConstants');
 const ShaderManager = require('./ShaderManager');
 const EffectTransform = require('./EffectTransform');
+const Silhouette = require('./Silhouette');
+const Skin = require('./Skin');
 const log = require('./util/log');
 
 /**
@@ -15,6 +17,27 @@ const __isTouchingPosition = twgl.v3.create();
 const __hullProjection = twgl.m4.ortho(-1, 1, -1, 1, -1, 1);
 const __hullTransform = twgl.m4.identity();
 const FLOATING_POINT_ERROR_ALLOWANCE = 1e-6;
+const SHAPE_EFFECTS_MASK = ShaderManager.EFFECT_INFO.fisheye.mask |
+    ShaderManager.EFFECT_INFO.whirl.mask |
+    ShaderManager.EFFECT_INFO.pixelate.mask |
+    ShaderManager.EFFECT_INFO.mosaic.mask;
+
+const alphaAt = (data, width, height, x, y) => {
+    if (x >= width || y >= height || x < 0 || y < 0) {
+        return 0;
+    }
+    return data[(((y * width) + x) * 4) + 3];
+};
+
+const touchesTexel = (data, width, height, linear, x, y) => {
+    if (linear) {
+        return alphaAt(data, width, height, x, y) > 0 ||
+            alphaAt(data, width, height, x + 1, y) > 0 ||
+            alphaAt(data, width, height, x, y + 1) > 0 ||
+            alphaAt(data, width, height, x + 1, y + 1) > 0;
+    }
+    return alphaAt(data, width, height, x, y) > 0;
+};
 
 /**
  * Convert a scratch space location into a texture space float.  Uses the
@@ -109,6 +132,8 @@ class Drawable {
         this._skinScaleDirty = true;
         this._inverseMatrix = twgl.m4.identity();
         this._inverseTransformDirty = true;
+        this._snappedFastBounds = new Rectangle();
+        this._snappedFastBoundsDirty = true;
         this._visible = true;
 
         /** A bitmask identifying which effects are currently in use.
@@ -159,6 +184,7 @@ class Drawable {
         this._transformDirty = true;
         this._inverseTransformDirty = true;
         this._transformedHullDirty = true;
+        this._snappedFastBoundsDirty = true;
     }
 
     /**
@@ -480,6 +506,7 @@ class Drawable {
      */
     setConvexHullDirty () {
         this._convexHullDirty = true;
+        this._snappedFastBoundsDirty = true;
     }
 
     /**
@@ -497,6 +524,7 @@ class Drawable {
             this._transformedHullPoints.push(twgl.v3.create());
         }
         this._transformedHullDirty = true;
+        this._snappedFastBoundsDirty = true;
     }
 
     /**
@@ -609,6 +637,14 @@ class Drawable {
         return this.getAABB(result);
     }
 
+    getSnappedFastBounds () {
+        if (this._snappedFastBoundsDirty) {
+            this.getFastBounds(this._snappedFastBounds).snapToInt();
+            this._snappedFastBoundsDirty = false;
+        }
+        return this._snappedFastBounds;
+    }
+
     /**
      * Transform all the convex hull points by the current Drawable's
      * transform. This allows us to skip recalculating the convex hull
@@ -679,6 +715,155 @@ class Drawable {
 
             this.isTouching = this._isTouchingNever;
         }
+    }
+
+    getPlainTouchingSilhouette () {
+        const skin = this._skin;
+        if (!skin || (this.enabledEffects & SHAPE_EFFECTS_MASK) !== 0) {
+            return null;
+        }
+        if (this.isTouching !== this._isTouchingNearest && this.isTouching !== this._isTouchingLinear) {
+            return null;
+        }
+        if (skin.isTouchingNearest !== Skin.prototype.isTouchingNearest ||
+            skin.isTouchingLinear !== Skin.prototype.isTouchingLinear) {
+            return null;
+        }
+        const silhouette = skin._silhouette;
+        if (!silhouette ||
+            silhouette.isTouchingNearest !== Silhouette.prototype.isTouchingNearest ||
+            silhouette.isTouchingLinear !== Silhouette.prototype.isTouchingLinear) {
+            return null;
+        }
+        return silhouette;
+    }
+
+    getPlainColorSilhouette () {
+        const skin = this._skin;
+        if (!skin || (this.enabledEffects & SHAPE_EFFECTS_MASK) !== 0) {
+            return null;
+        }
+        const silhouette = skin._silhouette;
+        if (!silhouette || silhouette.colorAtNearest !== Silhouette.prototype.colorAtNearest) {
+            return null;
+        }
+        return silhouette;
+    }
+
+    static isTouchingPlain (matrix, data, width, height, linear, x, y) {
+        const d = (x * matrix[3]) + (y * matrix[7]) + matrix[15];
+        let localX = Math.fround(0.5 - ((((x * matrix[0]) + (y * matrix[4])) + matrix[12]) / d));
+        let localY = Math.fround(((((x * matrix[1]) + (y * matrix[5])) + matrix[13]) / d) + 0.5);
+        if (Math.abs(localX) < FLOATING_POINT_ERROR_ALLOWANCE) localX = 0;
+        if (Math.abs(localY) < FLOATING_POINT_ERROR_ALLOWANCE) localY = 0;
+        return touchesTexel(data, width, height, linear,
+            Math.floor(localX * (width - 1)), Math.floor(localY * (height - 1)));
+    }
+
+    static samplePlainColor4b (x, y, drawable, silhouette, dst) {
+        const matrix = drawable._inverseMatrix;
+        const d = (x * matrix[3]) + (y * matrix[7]) + matrix[15];
+        let localX = Math.fround(0.5 - ((((x * matrix[0]) + (y * matrix[4])) + matrix[12]) / d));
+        let localY = Math.fround(((((x * matrix[1]) + (y * matrix[5])) + matrix[13]) / d) + 0.5);
+        if (Math.abs(localX) < FLOATING_POINT_ERROR_ALLOWANCE) localX = 0;
+        if (Math.abs(localY) < FLOATING_POINT_ERROR_ALLOWANCE) localY = 0;
+        if (localX < 0 || localY < 0 || localX > 1 || localY > 1) {
+            dst[0] = 0;
+            dst[1] = 0;
+            dst[2] = 0;
+            dst[3] = 0;
+            return dst;
+        }
+        const color = silhouette._getColor(
+            silhouette,
+            Math.floor(localX * (silhouette._width - 1)),
+            Math.floor(localY * (silhouette._height - 1)),
+            dst
+        );
+        if (drawable.enabledEffects === 0) return color;
+        return EffectTransform.transformColor(drawable, color);
+    }
+
+    static isTouchingPair (first, second, bounds, point) {
+        const firstSilhouette = first.getPlainTouchingSilhouette();
+        const secondSilhouette = second.getPlainTouchingSilhouette();
+        if (firstSilhouette === null || secondSilhouette === null) {
+            for (let x = bounds.left; x <= bounds.right; x++) {
+                point[0] = x;
+                for (let y = bounds.bottom; y <= bounds.top; y++) {
+                    point[1] = y;
+                    if (first.isTouching(point) && second.isTouching(point)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        const firstData = firstSilhouette._colorData;
+        const secondData = secondSilhouette._colorData;
+        if (!firstData || !secondData) {
+            return false;
+        }
+        const firstWidth = firstSilhouette._width;
+        const firstHeight = firstSilhouette._height;
+        const firstLinear = first.isTouching === first._isTouchingLinear;
+        const secondWidth = secondSilhouette._width;
+        const secondHeight = secondSilhouette._height;
+        const secondLinear = second.isTouching === second._isTouchingLinear;
+        const a = first._inverseMatrix;
+        const a0 = a[0];
+        const a1 = a[1];
+        const a3 = a[3];
+        const a4 = a[4];
+        const a5 = a[5];
+        const a7 = a[7];
+        const a12 = a[12];
+        const a13 = a[13];
+        const a15 = a[15];
+        const b = second._inverseMatrix;
+        const b0 = b[0];
+        const b1 = b[1];
+        const b3 = b[3];
+        const b4 = b[4];
+        const b5 = b[5];
+        const b7 = b[7];
+        const b12 = b[12];
+        const b13 = b[13];
+        const b15 = b[15];
+        const left = bounds.left;
+        const right = bounds.right;
+        const bottom = bounds.bottom;
+        const top = bounds.top;
+
+        for (let column = left; column <= right; column++) {
+            const x = Math.fround(column);
+            const ax0 = x * a0;
+            const ax1 = x * a1;
+            const ax3 = x * a3;
+            for (let row = bottom; row <= top; row++) {
+                const y = Math.fround(row);
+                const ad = ax3 + (y * a7) + a15;
+                let ax = Math.fround(0.5 - ((ax0 + (y * a4) + a12) / ad));
+                let ay = Math.fround(((ax1 + (y * a5) + a13) / ad) + 0.5);
+                if (Math.abs(ax) < FLOATING_POINT_ERROR_ALLOWANCE) ax = 0;
+                if (Math.abs(ay) < FLOATING_POINT_ERROR_ALLOWANCE) ay = 0;
+                if (!touchesTexel(firstData, firstWidth, firstHeight, firstLinear,
+                    Math.floor(ax * (firstWidth - 1)), Math.floor(ay * (firstHeight - 1)))) {
+                    continue;
+                }
+                const bd = (x * b3) + (y * b7) + b15;
+                let bx = Math.fround(0.5 - (((x * b0) + (y * b4) + b12) / bd));
+                let by = Math.fround((((x * b1) + (y * b5) + b13) / bd) + 0.5);
+                if (Math.abs(bx) < FLOATING_POINT_ERROR_ALLOWANCE) bx = 0;
+                if (Math.abs(by) < FLOATING_POINT_ERROR_ALLOWANCE) by = 0;
+                if (touchesTexel(secondData, secondWidth, secondHeight, secondLinear,
+                    Math.floor(bx * (secondWidth - 1)), Math.floor(by * (secondHeight - 1)))) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /**
