@@ -95,6 +95,7 @@ const colorMatches = (a, b, offset) => (
  * @type {number}
  */
 const FENCE_WIDTH = 15;
+const FENCE_SLACK = 0.01;
 
 // Loading text wrapper takes a while because of some of its dependencies, so only do so when needed.
 let _TextWrapper;
@@ -959,8 +960,9 @@ class RenderWebGL extends EventEmitter {
     }
 
     skinWasAltered(skin) {
-        for (const drawable of skin.attachedDrawables) {
-            drawable._skinWasAltered();
+        const attached = skin.attachedDrawables;
+        for (let i = 0; i < attached.length; i++) {
+            attached[i]._skinWasAltered();
         }
     }
 
@@ -1989,9 +1991,24 @@ class RenderWebGL extends EventEmitter {
             return [x, y];
         }
 
+        if (drawable._fenceBoundsKnown) {
+            const shiftX = x - drawable._fenceX;
+            const shiftY = y - drawable._fenceY;
+            const limitX = this._xRight - FENCE_WIDTH - FENCE_SLACK;
+            const limitY = this._yTop - FENCE_WIDTH - FENCE_SLACK;
+            if (drawable._fenceRight + shiftX >= -limitX && drawable._fenceLeft + shiftX <= limitX &&
+                drawable._fenceTop + shiftY >= -limitY && drawable._fenceBottom + shiftY <= limitY) {
+                return [x, y];
+            }
+        }
+
         const dx = x - drawable._position[0];
         const dy = y - drawable._position[1];
         const aabb = skin.getFenceBounds(drawable, __fenceBounds);
+        if (skin.getFenceBounds === Skin.prototype.getFenceBounds &&
+            drawable.getAABB === Drawable.prototype.getAABB) {
+            drawable.rememberFenceBounds(aabb);
+        }
         const inset = Math.floor(Math.min(aabb.width, aabb.height) / 2);
 
         const sx = this._xRight - Math.min(FENCE_WIDTH, inset);

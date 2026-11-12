@@ -17,6 +17,7 @@ const __isTouchingPosition = twgl.v3.create();
 const __hullProjection = twgl.m4.ortho(-1, 1, -1, 1, -1, 1);
 const __hullTransform = twgl.m4.identity();
 const FLOATING_POINT_ERROR_ALLOWANCE = 1e-6;
+const MAX_REMEMBERED_FENCE_COORDINATE = 1e6;
 const SHAPE_EFFECTS_MASK = ShaderManager.EFFECT_INFO.fisheye.mask |
     ShaderManager.EFFECT_INFO.whirl.mask |
     ShaderManager.EFFECT_INFO.pixelate.mask |
@@ -130,10 +131,18 @@ class Drawable {
         this._rotationCenterDirty = true;
         this._skinScale = twgl.v3.create(0, 0, 0);
         this._skinScaleDirty = true;
+        this._skinSlot = -1;
         this._inverseMatrix = twgl.m4.identity();
         this._inverseTransformDirty = true;
         this._snappedFastBounds = new Rectangle();
         this._snappedFastBoundsDirty = true;
+        this._fenceBoundsKnown = false;
+        this._fenceLeft = 0;
+        this._fenceRight = 0;
+        this._fenceBottom = 0;
+        this._fenceTop = 0;
+        this._fenceX = 0;
+        this._fenceY = 0;
         this._visible = true;
 
         /** A bitmask identifying which effects are currently in use.
@@ -185,6 +194,24 @@ class Drawable {
         this._inverseTransformDirty = true;
         this._transformedHullDirty = true;
         this._snappedFastBoundsDirty = true;
+        this._fenceBoundsKnown = false;
+    }
+
+    rememberFenceBounds (bounds) {
+        const x = this._position[0];
+        const y = this._position[1];
+        this._fenceBoundsKnown = Math.abs(x) < MAX_REMEMBERED_FENCE_COORDINATE &&
+            Math.abs(y) < MAX_REMEMBERED_FENCE_COORDINATE &&
+            Math.abs(bounds.left) < MAX_REMEMBERED_FENCE_COORDINATE &&
+            Math.abs(bounds.right) < MAX_REMEMBERED_FENCE_COORDINATE &&
+            Math.abs(bounds.bottom) < MAX_REMEMBERED_FENCE_COORDINATE &&
+            Math.abs(bounds.top) < MAX_REMEMBERED_FENCE_COORDINATE;
+        this._fenceLeft = bounds.left;
+        this._fenceRight = bounds.right;
+        this._fenceBottom = bounds.bottom;
+        this._fenceTop = bounds.top;
+        this._fenceX = x;
+        this._fenceY = y;
     }
 
     /**
@@ -207,11 +234,11 @@ class Drawable {
     set skin (newSkin) {
         if (this._skin !== newSkin) {
             if (this._skin) {
-                this._skin.attachedDrawables.delete(this);
+                this._skin.detachDrawable(this);
             }
             this._skin = newSkin;
             if (newSkin) {
-                newSkin.attachedDrawables.add(this);
+                newSkin.attachDrawable(this);
             }
             this._skinWasAltered();
         }
@@ -256,7 +283,9 @@ class Drawable {
                 this._position[1] = Math.round(position[1]);
             }
             this._renderer.dirty = true;
+            const fenceBoundsKnown = this._fenceBoundsKnown;
             this.setTransformDirty();
+            this._fenceBoundsKnown = fenceBoundsKnown;
         }
     }
 
