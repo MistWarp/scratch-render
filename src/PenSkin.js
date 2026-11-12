@@ -257,6 +257,12 @@ class PenSkin extends Skin {
     }
 
     _markSilhouetteDirty (left, right, bottom, top) {
+        if (!(left <= right && bottom <= top)) {
+            left = 0;
+            right = this._size[0];
+            bottom = 0;
+            top = this._size[1];
+        }
         if (this._silhouetteDirty) {
             if (left < this._dirtyLeft) this._dirtyLeft = left;
             if (right > this._dirtyRight) this._dirtyRight = right;

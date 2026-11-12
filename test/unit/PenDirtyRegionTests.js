@@ -95,3 +95,41 @@ test('a clean pen layer starts its dirty box from the next mark', t => {
     t.same(region(skin), [100, 110, 120, 130]);
     t.end();
 });
+
+const readBack = skin => {
+    const reads = [];
+    skin._renderer.gl = {
+        RGBA: 1,
+        UNSIGNED_BYTE: 2,
+        readPixels: (x, y, width, height) => reads.push([x, y, width, height])
+    };
+    skin._usePenBufferDrawRegionId = {};
+    skin._silhouettePixels = new Uint8Array(skin._size[0] * skin._size[1] * 4);
+    skin._silhouetteImageData = {};
+    skin._silhouette = {update: () => {}};
+    skin.updateSilhouette();
+    return reads;
+};
+
+test('only the dirty box is read back for the silhouette', t => {
+    const skin = fakePenSkin(480, 360, 1);
+    draw(skin, [[2, 0, 0, 10, 10]]);
+    t.same(readBack(skin), [[237, 167, 16, 16]]);
+    t.equal(skin._silhouetteDirty, false);
+    t.same(readBack(skin), [], 'nothing is read while the layer is clean');
+    t.end();
+});
+
+test('a line with a coordinate that is not a number makes the whole layer read back', t => {
+    for (const lines of [
+        [[2, 0, 0, 10, 10], [2, NaN, 0, 5, 5]],
+        [[2, NaN, 0, 5, 5], [2, 0, 0, 10, 10]],
+        [[2, 0, 0, 10, NaN]],
+        [[2, 3, NaN, 4, 5], [2, 0, 0, 10, 10], [2, 1, 1, NaN, 1]]
+    ]) {
+        const skin = fakePenSkin(480, 360, 1);
+        draw(skin, lines);
+        t.same(readBack(skin), [[0, 0, 480, 360]], JSON.stringify(lines));
+    }
+    t.end();
+});
