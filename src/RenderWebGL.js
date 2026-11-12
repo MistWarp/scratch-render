@@ -96,6 +96,8 @@ const colorMatches = (a, b, offset) => (
  */
 const FENCE_WIDTH = 15;
 const FENCE_SLACK = 0.01;
+const FENCE_ROUNDING = 1e-6;
+const FREE_MOVES_RANGE = Drawable.FREE_MOVES_RANGE;
 
 // Loading text wrapper takes a while because of some of its dependencies, so only do so when needed.
 let _TextWrapper;
@@ -1991,15 +1993,10 @@ class RenderWebGL extends EventEmitter {
             return [x, y];
         }
 
-        if (drawable._fenceBoundsKnown) {
-            const shiftX = x - drawable._fenceX;
-            const shiftY = y - drawable._fenceY;
-            const limitX = this._xRight - FENCE_WIDTH - FENCE_SLACK;
-            const limitY = this._yTop - FENCE_WIDTH - FENCE_SLACK;
-            if (drawable._fenceRight + shiftX >= -limitX && drawable._fenceLeft + shiftX <= limitX &&
-                drawable._fenceTop + shiftY >= -limitY && drawable._fenceBottom + shiftY <= limitY) {
-                return [x, y];
-            }
+        if (x >= drawable._freeMovesLeft && x <= drawable._freeMovesRight &&
+            y >= drawable._freeMovesBottom && y <= drawable._freeMovesTop &&
+            drawable._freeMovesStageRight === this._xRight && drawable._freeMovesStageTop === this._yTop) {
+            return [x, y];
         }
 
         const dx = x - drawable._position[0];
@@ -2007,7 +2004,7 @@ class RenderWebGL extends EventEmitter {
         const aabb = skin.getFenceBounds(drawable, __fenceBounds);
         if (skin.getFenceBounds === Skin.prototype.getFenceBounds &&
             drawable.getAABB === Drawable.prototype.getAABB) {
-            drawable.rememberFenceBounds(aabb);
+            this._rememberFreeMoves(drawable, aabb);
         }
         const inset = Math.floor(Math.min(aabb.width, aabb.height) / 2);
 
@@ -2024,6 +2021,44 @@ class RenderWebGL extends EventEmitter {
             y = Math.floor(drawable._position[1] + (sy - aabb.bottom));
         }
         return [x, y];
+    }
+
+    _rememberFreeMoves(drawable, aabb) {
+        drawable._freeMovesStageRight = this._xRight;
+        drawable._freeMovesStageTop = this._yTop;
+        const positionX = drawable._position[0];
+        const positionY = drawable._position[1];
+        if (!(Math.abs(positionX) <= FREE_MOVES_RANGE && Math.abs(positionY) <= FREE_MOVES_RANGE)) {
+            drawable._freeMovesLeft = NaN;
+            return;
+        }
+        const halfShortSide = Math.min(aabb.width, aabb.height) / 2;
+        if (Number.isNaN(halfShortSide)) {
+            drawable._freeMovesLeft = -Infinity;
+            drawable._freeMovesRight = Infinity;
+            drawable._freeMovesBottom = -Infinity;
+            drawable._freeMovesTop = Infinity;
+            return;
+        }
+        const inset = Math.min(FENCE_WIDTH, Math.floor(halfShortSide + FENCE_SLACK));
+        const reachX = this._xRight - inset;
+        const reachY = this._yTop - inset;
+        const marginX = FENCE_SLACK +
+            ((FREE_MOVES_RANGE + Math.abs(aabb.left) + Math.abs(aabb.right)) * FENCE_ROUNDING);
+        const marginY = FENCE_SLACK +
+            ((FREE_MOVES_RANGE + Math.abs(aabb.bottom) + Math.abs(aabb.top)) * FENCE_ROUNDING);
+        let left = positionX - reachX - aabb.right;
+        if (left > -Infinity) left += marginX;
+        let right = positionX + reachX - aabb.left;
+        if (right < Infinity) right -= marginX;
+        let bottom = positionY - reachY - aabb.top;
+        if (bottom > -Infinity) bottom += marginY;
+        let top = positionY + reachY - aabb.bottom;
+        if (top < Infinity) top -= marginY;
+        drawable._freeMovesLeft = left;
+        drawable._freeMovesRight = right;
+        drawable._freeMovesBottom = bottom;
+        drawable._freeMovesTop = top;
     }
 
     /**

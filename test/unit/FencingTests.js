@@ -227,3 +227,140 @@ test('bounds measured very far away are not reused near the fence', t => {
     }
     t.end();
 });
+
+test('a sprite with no measurable bounds is never fenced and stops recomputing them', t => {
+    const {renderer, drawable} = makeWorld(SizedSkin);
+    const plain = makeWorld(SizedSkin);
+    drawable.updateScale([Infinity, Infinity]);
+    plain.drawable.updateScale([Infinity, Infinity]);
+    let transforms = 0;
+    const calculateTransform = drawable._calculateTransform;
+    drawable._calculateTransform = function () {
+        transforms++;
+        return calculateTransform.call(this);
+    };
+    const moves = [[0, 0], [9000, -9000], [239, 400], [12.5, 7.25], [-Infinity, 5], [3, 4], [1e9, -1e9], [1, 2]];
+    const recomputed = [];
+    for (const [x, y] of moves) {
+        const before = transforms;
+        const expected = fenceWithoutMemory(plain.renderer, plain.drawable, [x, y]);
+        const position = renderer.getFencedPositionOfDrawable(0, [x, y]);
+        t.same(position, expected, `moving to ${x}, ${y}`);
+        t.same(position, [x, y]);
+        recomputed.push(transforms > before);
+        drawable.updatePosition(position);
+        plain.drawable.updatePosition(position);
+    }
+    t.same(recomputed, [true, false, false, false, false, true, true, true],
+        'only the first move and the moves around far or endless positions recompute');
+    drawable.updateScale([100, 100]);
+    plain.drawable.updateScale([100, 100]);
+    const expected = fenceWithoutMemory(plain.renderer, plain.drawable, [900, 0]);
+    t.same(renderer.getFencedPositionOfDrawable(0, [900, 0]), expected);
+    t.not(expected[0], 900);
+    t.end();
+});
+
+test('remembered free moves are dropped when the stage changes size', t => {
+    const {renderer, drawable} = makeWorld(SizedSkin);
+    drawable.updatePosition(renderer.getFencedPositionOfDrawable(0, [0, 0]));
+    t.same(renderer.getFencedPositionOfDrawable(0, [200, 150]), [200, 150]);
+    renderer._xRight = 100;
+    renderer._yTop = 80;
+    const expected = fenceWithoutMemory(renderer, drawable, [200, 150]);
+    t.same(renderer.getFencedPositionOfDrawable(0, [200, 150]), expected);
+    t.not(expected[0], 200);
+    t.not(expected[1], 150);
+    renderer._xRight = 240;
+    renderer._yTop = 180;
+    t.same(renderer.getFencedPositionOfDrawable(0, [200, 150]), [200, 150]);
+    t.end();
+});
+
+test('moves right at the fence are decided the same way from any starting point', t => {
+    const random = makeRandom(99);
+    let checked = 0;
+    let mismatch = null;
+    for (let shape = 0; shape < 40 && mismatch === null; shape++) {
+        const remembered = makeWorld(SizedSkin);
+        const plain = makeWorld(SizedSkin);
+        const scale = [20 + (random() * 300), 20 + (random() * 300)];
+        const direction = Math.floor(random() * 360) - 180;
+        const skinIndex = Math.floor(random() * 3);
+        for (const world of [remembered, plain]) {
+            world.drawable.setHighQuality(true);
+            world.drawable.skin = world.skins[skinIndex];
+            world.drawable.updateScale(scale);
+            world.drawable.updateDirection(direction);
+        }
+        const isFree = (x, y) => {
+            const result = fenceWithoutMemory(plain.renderer, plain.drawable, [x, y]);
+            return result[0] === x && result[1] === y;
+        };
+        for (let round = 0; round < 30 && mismatch === null; round++) {
+            const start = [(random() * 400) - 200, (random() * 300) - 150];
+            const startPosition = fenceWithoutMemory(plain.renderer, plain.drawable, start);
+            remembered.renderer.getFencedPositionOfDrawable(0, start);
+            remembered.drawable.updatePosition(startPosition);
+            plain.drawable.updatePosition(startPosition);
+            const horizontal = random() < 0.5;
+            const other = (random() * 100) - 50;
+            const at = value => (horizontal ? [value, other] : [other, value]);
+            if (!isFree(...at(0))) continue;
+            let inside = 0;
+            let outside = random() < 0.5 ? 3000 : -3000;
+            if (isFree(...at(outside))) continue;
+            for (let i = 0; i < 60; i++) {
+                const middle = (inside + outside) / 2;
+                if (isFree(...at(middle))) inside = middle; else outside = middle;
+            }
+            const offsets = [0.5, 0.02, 0.0101, 0.0099, 1e-3, 1e-5, 1e-7];
+            for (const offset of [0, ...offsets, ...offsets.map(value => -value)]) {
+                const target = at(inside + offset);
+                const expected = fenceWithoutMemory(plain.renderer, plain.drawable, target);
+                const actual = remembered.renderer.getFencedPositionOfDrawable(0, target);
+                checked++;
+                if (!Object.is(actual[0], expected[0]) || !Object.is(actual[1], expected[1])) {
+                    mismatch = `shape ${shape} round ${round}: ${target} gave ${actual} instead of ${expected}`;
+                }
+            }
+        }
+    }
+    t.equal(mismatch, null);
+    t.ok(checked > 5000, `${checked} moves checked`);
+    t.end();
+});
+
+test('moves that stop just short of the fence still skip the bounds', t => {
+    for (const skinIndex of [0, 1, 2]) {
+        const {renderer, drawable, skins} = makeWorld(SizedSkin);
+        const plain = makeWorld(SizedSkin);
+        drawable.skin = skins[skinIndex];
+        plain.drawable.skin = plain.skins[skinIndex];
+        drawable.updatePosition(renderer.getFencedPositionOfDrawable(0, [0, 0]));
+        const isFree = (x, y) => {
+            const result = fenceWithoutMemory(plain.renderer, plain.drawable, [x, y]);
+            return result[0] === x && result[1] === y;
+        };
+        let transforms = 0;
+        const calculateTransform = drawable._calculateTransform;
+        drawable._calculateTransform = function () {
+            transforms++;
+            return calculateTransform.call(this);
+        };
+        for (const [stepX, stepY] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            let inside = 0;
+            let outside = 5000;
+            for (let i = 0; i < 40; i++) {
+                const middle = (inside + outside) / 2;
+                if (isFree(stepX * middle, stepY * middle)) inside = middle; else outside = middle;
+            }
+            const move = [stepX * (inside - 0.5), stepY * (inside - 0.5)];
+            t.same(renderer.getFencedPositionOfDrawable(0, move), move, `skin ${skinIndex} to ${move}`);
+            drawable.updatePosition(move);
+            plain.drawable.updatePosition(move);
+        }
+        t.equal(transforms, 0, `skin ${skinIndex}`);
+    }
+    t.end();
+});
