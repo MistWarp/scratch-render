@@ -257,11 +257,17 @@ class PenSkin extends Skin {
     }
 
     _markSilhouetteDirty (left, right, bottom, top) {
+        if (!(left <= right && bottom <= top)) {
+            left = 0;
+            right = this._size[0];
+            bottom = 0;
+            top = this._size[1];
+        }
         if (this._silhouetteDirty) {
-            this._dirtyLeft = Math.min(this._dirtyLeft, left);
-            this._dirtyRight = Math.max(this._dirtyRight, right);
-            this._dirtyBottom = Math.min(this._dirtyBottom, bottom);
-            this._dirtyTop = Math.max(this._dirtyTop, top);
+            if (left < this._dirtyLeft) this._dirtyLeft = left;
+            if (right > this._dirtyRight) this._dirtyRight = right;
+            if (bottom < this._dirtyBottom) this._dirtyBottom = bottom;
+            if (top > this._dirtyTop) this._dirtyTop = top;
         } else {
             this._silhouetteDirty = true;
             this._dirtyLeft = left;
@@ -463,11 +469,15 @@ class PenSkin extends Skin {
         const dirtyRadius = (lineThickness * 0.5) + 2;
         const halfWidth = this._size[0] * 0.5;
         const halfHeight = this._size[1] * 0.5;
+        const lowX = x0 < x1 ? x0 : x1;
+        const highX = x0 < x1 ? x1 : x0;
+        const lowY = y0 < y1 ? y0 : y1;
+        const highY = y0 < y1 ? y1 : y0;
         this._markSilhouetteDirty(
-            halfWidth + Math.min(x0, x1) - dirtyRadius,
-            halfWidth + Math.max(x0, x1) + dirtyRadius,
-            halfHeight - Math.max(y0, y1) - dirtyRadius,
-            halfHeight - Math.min(y0, y1) + dirtyRadius
+            halfWidth + lowX - dirtyRadius,
+            halfWidth + highX + dirtyRadius,
+            halfHeight - highY - dirtyRadius,
+            halfHeight - lowY + dirtyRadius
         );
 
         for (let i = 0; i < iters; i++) {

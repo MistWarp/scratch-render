@@ -54,11 +54,24 @@ class Skin {
          */
         this.private = false;
 
-        /**
-         * Drawables currently using this skin, maintained by the Drawable skin setter.
-         * @type {Set<Drawable>}
-         */
-        this.attachedDrawables = new Set();
+        this.attachedDrawables = [];
+    }
+
+    attachDrawable (drawable) {
+        drawable._skinSlot = this.attachedDrawables.length;
+        this.attachedDrawables.push(drawable);
+    }
+
+    detachDrawable (drawable) {
+        const attached = this.attachedDrawables;
+        const slot = drawable._skinSlot;
+        if (attached[slot] !== drawable) return;
+        const last = attached.pop();
+        if (last !== drawable) {
+            attached[slot] = last;
+            last._skinSlot = slot;
+        }
+        drawable._skinSlot = -1;
     }
 
     /**
